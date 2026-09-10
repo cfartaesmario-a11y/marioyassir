@@ -121,7 +121,6 @@
     <div class="eyebrow">circuito compartido</div>
     <h1>Gran Premio<br><span class="acento">YASSIR</span></h1>
     <p class="intro">Dos vueltas con salida por semáforo, derrapes que dejan marca en el asfalto, zonas de turbo y un pórtico de meta con el nombre en grande. Crea la sala, reparte el código y corred a la vez.</p>
-    <p class="intro" style="color:#C98A3C">¿Te llamas Mario? En la parrilla te saldrá la opción de dejar el coche y pilotar el avión de MARIO AIRLINES para hostigar a los demás con misiles.</p>
     <div id="config" class="oculto" style="background:#141C25;border:1px solid #33475A;border-radius:12px;padding:16px;margin-bottom:20px">
       <div style="font-weight:700;margin-bottom:6px">Conecta la base de datos</div>
       <p style="color:#8FA5B5;font-size:13px;line-height:1.55;margin:0 0 10px">
@@ -149,9 +148,7 @@ appId: "..."' style="resize:vertical;font-size:12px;font-family:ui-monospace,mon
     </div>
     </div>
     <p id="avisoInicio" class="aviso"></p>
-    <p class="pie"><b>Al volante:</b> flechas o WASD · espacio derrapa · C cambia de cámara · R te devuelve al asfalto.<br>
-    <b>A los mandos del avión:</b> izquierda y derecha inclinan y viran · arriba y abajo mueven el morro · mayúsculas acelera · espacio dispara al coche que tengas en la mira.<br>
-    Las salas se sincronizan en tiempo real: quien tenga el código entra.</p>
+    <p class="pie">Flechas o WASD para conducir · espacio derrapa · C cambia de cámara · R te devuelve al asfalto. Las salas se sincronizan en tiempo real: quien tenga el código entra.</p>
   </div>
 </div>
 
@@ -169,7 +166,9 @@ appId: "..."' style="resize:vertical;font-size:12px;font-family:ui-monospace,mon
     </div>
     <div>
       <div class="botonesSup">
-        <button id="btnSonido" class="chip">Sonido on</button>
+        <button id="btnAuto" class="chip oculto">Auto: off</button>
+      <button id="btnTorreta" class="chip oculto">Torreta: off</button>
+      <button id="btnSonido" class="chip">Sonido on</button>
         <button id="btnCamara" class="chip">persecución</button>
         <button id="btnSalir" class="chip">Salir</button>
       </div>
@@ -200,7 +199,8 @@ appId: "..."' style="resize:vertical;font-size:12px;font-family:ui-monospace,mon
     <div class="fila"><span class="cl">altitud</span><span id="pilAlt">0 m</span></div>
     <div class="fila"><span class="cl">velocidad</span><span id="pilVel">0</span></div>
     <div class="fila"><span class="cl">objetivo</span><span id="objetivoNom">ninguno</span></div>
-    <div class="fila"><span class="cl">misiles</span><span id="pilCarga">listo</span></div>
+    <div class="fila"><span class="cl">misil</span><span id="pilCarga">listo</span></div>
+    <div class="fila"><span class="cl">modo</span><span id="pilModo">manual</span></div>
   </div>
 
   <div id="mandosPiloto" class="oculto" style="position:absolute;left:0;right:0;bottom:0;padding:16px;display:flex;justify-content:space-between;pointer-events:none">
@@ -212,7 +212,8 @@ appId: "..."' style="resize:vertical;font-size:12px;font-family:ui-monospace,mon
       <button class="pad chico" data-mando="bajar">morro ▼</button>
       <button class="pad chico" data-mando="subir">morro ▲</button>
       <button class="pad chico" data-mando="gas" style="background:#2B4A5C">turbo</button>
-      <button class="pad gas" data-mando="fuego">FUEGO</button>
+      <button class="pad chico" data-mando="misil" style="background:#8A3320;color:#F2EFE6">MISIL</button>
+      <button class="pad gas" data-mando="blas">BLAS</button>
     </div>
   </div>
 
@@ -1084,7 +1085,9 @@ appId: "..."' style="resize:vertical;font-size:12px;font-family:ui-monospace,mon
   var vista = "inicio", fase = "lobby", camara = "persecución";
   var codigo = null, sala = null, rondaLocal = -1;
   var reinicio = 0;
-  var mando = { gas: 0, freno: 0, izq: 0, der: 0, mano: 0, subir: 0, bajar: 0, fuego: 0 };
+  var mando = { gas: 0, freno: 0, izq: 0, der: 0, mano: 0, subir: 0, bajar: 0, fuego: 0, blas: 0, misil: 0 };
+  var auto = false;
+  var torre = { on: false, yaw: 0, pitch: -0.55, blasT: 0, blasN: 0, misilT: 0, objetivo: null };
   var miRol = "corredor";
   var pil = { x: 0, y: 0, z: 0, yaw: 0, pitch: 0, roll: 0, vel: 78, tiroN: 0, espera: 0, objetivo: null };
   var mis = { u: 0, vuelta: 0, total: 0, vel: 0, off: 0, terminado: false, tiempo: 0, mejor: 0, ronda: 0 };
@@ -1179,6 +1182,9 @@ appId: "..."' style="resize:vertical;font-size:12px;font-family:ui-monospace,mon
     if (miRol === "piloto") {
       d.px = pil.x; d.py = pil.y; d.pz = pil.z;
       d.ryaw = pil.yaw; d.rpit = pil.pitch; d.rrol = pil.roll; d.tiroN = pil.tiroN;
+      d.blasN = torre.blasN; d.bdx = torre.dx || 0; d.bdy = torre.dy || 0; d.bdz = torre.dz || 1;
+    } else {
+      d.vol = mis.vol || 0;
     }
     refYo.update(d);
   }
@@ -1214,6 +1220,9 @@ appId: "..."' style="resize:vertical;font-size:12px;font-family:ui-monospace,mon
   }
   function aplicarRol() {
     var vuela = miRol === "piloto" && fase !== "lobby";
+    $("btnAuto").classList.toggle("oculto", miRol !== "piloto");
+    $("btnTorreta").classList.toggle("oculto", miRol !== "piloto");
+    if (miRol === "piloto") pintarChips();
     $("mira").classList.toggle("oculto", !vuela);
     $("hudPiloto").classList.toggle("oculto", !vuela);
     $("mandosPiloto").classList.toggle("oculto", !(vuela && (fase === "corriendo" || fase === "intro")));
@@ -1293,7 +1302,7 @@ appId: "..."' style="resize:vertical;font-size:12px;font-family:ui-monospace,mon
     }
     $("btnEnlace").classList.toggle("oculto", enLocal);
     if (enLocal) $("notaLobby").textContent = "Modo local: corres tú solo.";
-    else if (esMario()) $("notaLobby").textContent = "Mario: puedes dejar el coche y salir a volar. Tus misiles frenan a quien alcances.";
+    else if (esMario()) $("notaLobby").textContent = "Torreta: arrastra para apuntar · espacio ametralla · F lanza el misil · T y P cambian torreta y automático.";
     else $("notaLobby").textContent = "Pasa el código a quien quieras que corra contigo.";
 
     var clas = pilotos.filter(function (j) { return j.ronda === sala.ronda && j.rol !== "piloto"; }).sort(function (a, b) {
@@ -1432,6 +1441,19 @@ appId: "..."' style="resize:vertical;font-size:12px;font-family:ui-monospace,mon
     if (audio) audio.master.gain.value = sonidoOn ? 0.55 : 0;
     this.textContent = sonidoOn ? "Sonido on" : "Sonido off";
   };
+  function pintarChips() {
+    $("btnAuto").textContent = "Auto: " + (auto ? "on" : "off");
+    $("btnTorreta").textContent = "Torreta: " + (torre.on ? "on" : "off");
+    if ($("pilModo")) $("pilModo").textContent = (auto ? "automático" : "manual") + (torre.on ? " · torreta" : "");
+  }
+  $("btnAuto").onclick = function () { auto = !auto; pintarChips(); };
+  $("btnTorreta").onclick = function () {
+    torre.on = !torre.on;
+    if (torre.on) auto = true;
+    $("mira").classList.toggle("oculto", !(miRol === "piloto" && fase !== "lobby"));
+    pintarChips();
+  };
+
   $("btnCamara").onclick = function () {
     camara = camara === "persecución" ? "cabina" : camara === "cabina" ? "cine" : "persecución";
     this.textContent = camara;
@@ -1526,7 +1548,31 @@ appId: "..."' style="resize:vertical;font-size:12px;font-family:ui-monospace,mon
     var avion = mundo.avion, misiles = mundo.misiles, explosiones = mundo.explosiones;
     var sol = mundo.sol;
     var avionYo = crearAvion(); avionYo.visible = false; scene.add(avionYo);
-    var penal = 0;
+    var penal = 0, vuelco = 0, golpeN = 0;
+
+    /* trazadoras de la ametralladora */
+    var TRAZ = 40, trazadoras = [];
+    var geoTraz = new THREE.BoxGeometry(0.22, 0.22, 4.2);
+    var matTraz = new THREE.MeshBasicMaterial({ color: 0x9dfff0 });
+    for (var q = 0; q < TRAZ; q++) {
+      var tr = new THREE.Mesh(geoTraz, matTraz);
+      tr.visible = false;
+      scene.add(tr);
+      trazadoras.push({ malla: tr, activa: false, t: 0, vx: 0, vy: 0, vz: 0, mia: false });
+    }
+    var dirTorre = new THREE.Vector3(0, 0, 1);
+
+    function lanzarTrazadora(x, y, z, dx, dy, dz, mia) {
+      var li = null, k;
+      for (k = 0; k < trazadoras.length; k++) if (!trazadoras[k].activa) { li = trazadoras[k]; break; }
+      if (!li) return;
+      li.activa = true; li.t = 0; li.mia = !!mia;
+      li.malla.visible = true;
+      li.malla.position.set(x, y, z);
+      li.malla.rotation.order = "YXZ";
+      li.malla.rotation.set(-Math.asin(Math.max(-1, Math.min(1, dy))), Math.atan2(dx, dz), 0);
+      li.vx = dx * 460; li.vy = dy * 460; li.vz = dz * 460;
+    }
 
     var miCoche = crearCoche(yo.color);
     scene.add(miCoche);
@@ -1567,6 +1613,29 @@ appId: "..."' style="resize:vertical;font-size:12px;font-family:ui-monospace,mon
       return r ? r.mesh.position : null;
     }
 
+    function aplicarGolpe(tipo) {
+      if (miRol === "piloto") return;
+      if (tipo === "vuelco") {
+        vuelco = 3;
+        coche.vLong *= 0.25;
+        coche.giro = 0;
+        sacudidaExtra = 3;
+        flash("¡VOLCADO!", "#FF5A3C");
+        if (audio) audio.boom(0.6);
+      } else {
+        penal = Math.max(penal, 0.55);
+        coche.vLong *= 0.86;
+        sacudidaExtra = Math.max(sacudidaExtra, 0.9);
+        if (audio) audio.pitido(240, 0.12, 0.09);
+      }
+    }
+
+    function publicarGolpe(id, tipo) {
+      golpeN++;
+      if (enLocal || !refYo) return;
+      refYo.update({ golpeN: golpeN, golpeId: id, golpeTipo: tipo });
+    }
+
     function penalizar() {
       penal = 1.7;
       coche.vLong *= 0.42;
@@ -1595,6 +1664,21 @@ appId: "..."' style="resize:vertical;font-size:12px;font-family:ui-monospace,mon
       coche.vLat = 0;
     }
 
+    var arrastre = { x: 0, y: 0, activo: false, px: 0, py: 0 };
+    var lienzoEl = $("lienzo");
+    lienzoEl.addEventListener("pointerdown", function (e) {
+      if (!torre.on || miRol !== "piloto") return;
+      arrastre.activo = true; arrastre.px = e.clientX; arrastre.py = e.clientY;
+    });
+    window.addEventListener("pointermove", function (e) {
+      if (!arrastre.activo) return;
+      arrastre.x -= (e.clientX - arrastre.px) * 0.005;
+      arrastre.y -= (e.clientY - arrastre.py) * 0.005;
+      arrastre.px = e.clientX; arrastre.py = e.clientY;
+    });
+    window.addEventListener("pointerup", function () { arrastre.activo = false; });
+    window.addEventListener("pointercancel", function () { arrastre.activo = false; });
+
     var teclas = {};
     window.addEventListener("keydown", function (e) {
       teclas[e.code] = true;
@@ -1602,6 +1686,8 @@ appId: "..."' style="resize:vertical;font-size:12px;font-family:ui-monospace,mon
       if (vista !== "sala") return;
       if (e.code === "KeyC") $("btnCamara").click();
       if (e.code === "KeyR") reposicionar();
+      if (e.code === "KeyT" && miRol === "piloto") $("btnTorreta").click();
+      if (e.code === "KeyP" && miRol === "piloto") $("btnAuto").click();
       if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space"].indexOf(e.code) >= 0) e.preventDefault();
     });
     window.addEventListener("keyup", function (e) { teclas[e.code] = false; });
@@ -1754,7 +1840,27 @@ appId: "..."' style="resize:vertical;font-size:12px;font-family:ui-monospace,mon
         var giroA = ((teclas.ArrowLeft || teclas.KeyA) ? 1 : m.izq) - ((teclas.ArrowRight || teclas.KeyD) ? 1 : m.der);
         var cabeceo = ((teclas.ArrowUp || teclas.KeyW) ? 1 : m.subir) - ((teclas.ArrowDown || teclas.KeyS) ? 1 : m.bajar);
         var turbo = ((teclas.ShiftLeft || teclas.ShiftRight) ? 1 : m.gas);
-        if (f === "corriendo" || f === "meta") {
+        if ((f === "corriendo" || f === "meta") && auto) {
+          /* piloto automático: persigue al coche que va primero y lo orbita */
+          var presa = null, mejorT = -1;
+          for (var ida in remotos) {
+            var ra = remotos[ida];
+            if (ra.tipo === "piloto") continue;
+            if (ra.mostrado > mejorT) { mejorT = ra.mostrado; presa = ra.mesh.position; }
+          }
+          if (!presa) presa = muestras[(coche.idx + 120) % N];
+          var dxA = presa.x - pil.x, dzA = presa.z - pil.z;
+          var distA = Math.sqrt(dxA * dxA + dzA * dzA);
+          var yawObj = Math.atan2(dxA, dzA) + (distA < 190 ? 1.05 : 0);
+          var difY = ((yawObj - pil.yaw + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+          var rollObj = Math.max(-0.85, Math.min(0.85, difY * 1.5));
+          pil.roll += (rollObj - pil.roll) * Math.min(dt * 2.2, 1);
+          pil.yaw += pil.roll * 0.62 * dt;
+          var difH = (presa.y + 78) - pil.y;
+          var pitObj = Math.max(-0.22, Math.min(0.22, difH * 0.005));
+          pil.pitch += (pitObj - pil.pitch) * Math.min(dt * 2, 1);
+          pil.vel += ((distA > 300 ? 122 : 84) - pil.vel) * Math.min(dt * 0.7, 1);
+        } else if (f === "corriendo" || f === "meta") {
           pil.roll += (giroA * 0.82 - pil.roll) * Math.min(dt * 2.4, 1);
           pil.yaw += pil.roll * 0.62 * dt;
           pil.pitch += (cabeceo * 0.42 - pil.pitch) * Math.min(dt * 2.2, 1);
@@ -1781,40 +1887,75 @@ appId: "..."' style="resize:vertical;font-size:12px;font-family:ui-monospace,mon
         avionYo.rotation.set(-pil.pitch, pil.yaw, pil.roll);
         if (avionYo.userData.baliza) avionYo.userData.baliza.visible = (Math.floor(ahora / 500) % 2) === 0;
 
-        var mejorObj = null, mejorDot = 0.55;
+        /* la torreta apunta en coordenadas del mundo, así el balanceo no marea */
+        if (torre.on) {
+          var giroT = ((teclas.ArrowLeft || teclas.KeyA) ? 1 : m.izq) - ((teclas.ArrowRight || teclas.KeyD) ? 1 : m.der);
+          var altT = ((teclas.ArrowUp || teclas.KeyW) ? 1 : m.subir) - ((teclas.ArrowDown || teclas.KeyS) ? 1 : m.bajar);
+          torre.yaw += giroT * 1.5 * dt + arrastre.x;
+          torre.pitch += altT * 1.1 * dt + arrastre.y;
+          arrastre.x = 0; arrastre.y = 0;
+          if (torre.pitch < -1.35) torre.pitch = -1.35;
+          if (torre.pitch > 0.35) torre.pitch = 0.35;
+          var cpt = Math.cos(torre.pitch);
+          dirTorre.set(Math.sin(torre.yaw) * cpt, Math.sin(torre.pitch), Math.cos(torre.yaw) * cpt);
+        } else {
+          torre.yaw = pil.yaw; torre.pitch = -0.35;
+          dirTorre.set(fx, fy, fz);
+        }
+        torre.dx = dirTorre.x; torre.dy = dirTorre.y; torre.dz = dirTorre.z;
+
+        var mejorObj = null, mejorDot = torre.on ? 0.985 : 0.55;
         for (var oid in remotos) {
           var ro = remotos[oid];
           if (ro.tipo === "piloto") continue;
           var dxo = ro.mesh.position.x - pil.x, dyo = ro.mesh.position.y - pil.y, dzo = ro.mesh.position.z - pil.z;
           var lo = Math.sqrt(dxo * dxo + dyo * dyo + dzo * dzo) || 1;
-          var dotO = (dxo * fx + dyo * fy + dzo * fz) / lo;
-          if (dotO > mejorDot && lo < 700) { mejorDot = dotO; mejorObj = oid; }
+          var dotO = (dxo * dirTorre.x + dyo * dirTorre.y + dzo * dirTorre.z) / lo;
+          if (dotO > mejorDot && lo < 900) { mejorDot = dotO; mejorObj = oid; }
         }
         pil.objetivo = mejorObj;
 
+        /* ametralladora */
+        torre.blasT = Math.max(0, torre.blasT - dt);
+        if ((teclas.Space ? 1 : m.blas) && torre.blasT <= 0 && corre) {
+          torre.blasT = 0.11;
+          torre.blasN++;
+          var ox = pil.x + dirTorre.x * 4, oy = pil.y - 3.4 + dirTorre.y * 4, oz = pil.z + dirTorre.z * 4;
+          lanzarTrazadora(ox, oy, oz, dirTorre.x, dirTorre.y, dirTorre.z, true);
+          if (audio) audio.pitido(300 + Math.random() * 60, 0.05, 0.05);
+        }
+
+        /* misil con enganche */
         pil.espera = Math.max(0, pil.espera - dt);
-        if ((teclas.Space ? 1 : m.fuego) && pil.espera <= 0 && corre) {
-          pil.espera = 0.8;
+        if ((teclas.KeyF ? 1 : m.misil) && pil.espera <= 0 && corre && pil.objetivo) {
+          pil.espera = 2.2;
           pil.tiroN++;
-          var bx = pil.x - fx * 7, by = pil.y - 3, bz = pil.z - fz * 7;
+          var bx = pil.x + dirTorre.x * 5, by = pil.y - 3.4, bz = pil.z + dirTorre.z * 5;
           lanzarGuiado(bx, by, bz, pil.objetivo);
           publicarTiro(bx, by, bz, pil.objetivo);
-          if (audio) audio.pitido(1500, 0.2, 0.06);
+          flash("MISIL LANZADO", "#FF5A3C");
+          if (audio) audio.pitido(1500, 0.25, 0.07);
         }
         $("pilAlt").textContent = Math.round(pil.y - sueloAqui) + " m";
         $("pilVel").textContent = Math.round(pil.vel * 3.6) + " km/h";
         var jObj = (pil.objetivo && sala && sala.jugadores) ? sala.jugadores[pil.objetivo] : null;
         $("objetivoNom").textContent = jObj ? jObj.nombre : "ninguno";
-        $("pilCarga").textContent = pil.espera > 0 ? "recargando" : "listo";
+        $("pilCarga").textContent = pil.espera > 0 ? "recargando" : (pil.objetivo ? "ENGANCHADO" : "sin blanco");
       }
 
       if (coche.turbo > 0) coche.turbo = Math.max(0, coche.turbo - dt);
       if (penal > 0) penal = Math.max(0, penal - dt);
+      if (vuelco > 0) {
+        vuelco = Math.max(0, vuelco - dt);
+        coche.vLong -= coche.vLong * 1.5 * dt;
+        coche.giro = 0;
+      }
+      mis.vol = vuelco > 0 ? 1 : 0;
       var techo = (coche.fuera ? VEL_MAX * 0.45 : VEL_MAX) * (coche.turbo > 0 ? 1.32 : 1) * (penal > 0 ? 0.5 : 1);
 
       if (f === "intro" || f === "lobby") {
         coche.vLong = 0; coche.vLat = 0; coche.giro = 0;
-      } else if (corre && !soyPiloto) {
+      } else if (corre && !soyPiloto && vuelco <= 0) {
         if (gas) coche.vLong += (coche.turbo > 0 ? 52 : 34) * Math.max(0, 1 - coche.vLong / techo) * dt;
         if (freno) coche.vLong -= (coche.vLong > 0 ? 46 : 18) * dt;
         coche.vLong -= coche.vLong * (coche.fuera ? 1.6 : (penal > 0 ? 1.1 : 0.1)) * dt;
@@ -1918,6 +2059,11 @@ appId: "..."' style="resize:vertical;font-size:12px;font-family:ui-monospace,mon
       miCoche.position.copy(coche.pos);
       miCoche.rotation.order = "YXZ";
       miCoche.rotation.set(-pendienteY, coche.rumbo + angDeriva * 0.35, -coche.giro * rapidez * 0.12);
+      if (vuelco > 0) {
+        var gv = 1 - vuelco / 3;
+        miCoche.rotation.z += gv * Math.PI * 4;
+        miCoche.position.y += Math.sin(gv * Math.PI) * 1.7;
+      }
       var acelLong = (coche.vLong - velAnterior) / Math.max(dt, 0.001);
       velAnterior = coche.vLong;
       var objCab = Math.max(-0.075, Math.min(0.075, -acelLong * 0.0035));
@@ -1984,12 +2130,12 @@ appId: "..."' style="resize:vertical;font-size:12px;font-family:ui-monospace,mon
               mesh: malla, tipo: tipoJ, color: j.color || "#cccccc",
               mostrado: j.total || 0, objetivo: j.total || 0, sello: -1, vel: 0, off: 0,
               px: j.px || 0, py: j.py || 60, pz: j.pz || 0, ryaw: j.ryaw || 0, rpit: 0, rrol: 0,
-              yawVis: j.ryaw || 0, tiroN: j.tiroN || 0
+              yawVis: j.ryaw || 0, tiroN: j.tiroN || 0, blasN: j.blasN || 0, golpeN: j.golpeN || 0, vol: 0
             };
             if (tipoJ === "piloto") malla.position.set(r.px, r.py, r.pz);
           }
           if (j.sello !== r.sello) {
-            r.sello = j.sello; r.objetivo = j.total || 0; r.vel = j.vel || 0; r.off = j.off || 0;
+            r.sello = j.sello; r.objetivo = j.total || 0; r.vel = j.vel || 0; r.off = j.off || 0; r.vol = j.vol || 0;
             if (Math.abs(r.objetivo - r.mostrado) > 0.12) r.mostrado = r.objetivo;
           }
           if (tipoJ === "piloto") {
@@ -1998,6 +2144,15 @@ appId: "..."' style="resize:vertical;font-size:12px;font-family:ui-monospace,mon
             if (j.tiroN && j.tiroN !== r.tiroN) {
               r.tiroN = j.tiroN;
               lanzarGuiado(j.tiroX || r.px, j.tiroY || r.py, j.tiroZ || r.pz, j.tiroObj || null);
+            }
+            if (j.blasN && j.blasN !== r.blasN) {
+              r.blasN = j.blasN;
+              lanzarTrazadora(r.mesh.position.x, r.mesh.position.y - 3.4, r.mesh.position.z,
+                j.bdx || 0, j.bdy || -0.3, j.bdz || 1, false);
+            }
+            if (j.golpeN && j.golpeN !== r.golpeN) {
+              r.golpeN = j.golpeN;
+              if (j.golpeId === yo.id) aplicarGolpe(j.golpeTipo || "blas");
             }
           }
         }
@@ -2022,7 +2177,7 @@ appId: "..."' style="resize:vertical;font-size:12px;font-family:ui-monospace,mon
         var pp = muestras[ii], ll = lados[ii];
         rr.mesh.position.set(pp.x + ll.x * rr.off, pp.y + 0.06, pp.z + ll.z * rr.off);
         rr.mesh.rotation.order = "YXZ";
-        rr.mesh.rotation.set(0, rumboEn(ii), 0);
+        rr.mesh.rotation.set(0, rumboEn(ii), rr.vol ? ((ahora / 110) % 6.283) : 0);
         rr.mesh.userData.ruedas.forEach(function (w2) { w2.rotation.x -= (rr.vel * dt) / 0.48; });
       }
 
@@ -2074,7 +2229,7 @@ appId: "..."' style="resize:vertical;font-size:12px;font-family:ui-monospace,mon
           if (lm < 5 || ms.t > ms.dur) {
             ms.activo = false; ms.malla.visible = false; ms.guiado = false;
             explotar(ms.malla.position.x, ms.malla.position.y, ms.malla.position.z);
-            if (ms.objId === yo.id && miRol !== "piloto" && lm < 7) penalizar();
+            if (ms.objId === yo.id && miRol !== "piloto" && lm < 9) aplicarGolpe("vuelco");
             ms.objId = null;
           }
           continue;
@@ -2091,6 +2246,35 @@ appId: "..."' style="resize:vertical;font-size:12px;font-family:ui-monospace,mon
           }
         }
       }
+      for (k = 0; k < trazadoras.length; k++) {
+        var tz = trazadoras[k];
+        if (!tz.activa) continue;
+        tz.t += dt;
+        tz.malla.position.x += tz.vx * dt;
+        tz.malla.position.y += tz.vy * dt;
+        tz.malla.position.z += tz.vz * dt;
+        if (tz.t > 1.25) { tz.activa = false; tz.malla.visible = false; continue; }
+        if (tz.mia && soyPiloto) {
+          for (var idc in remotos) {
+            var rc = remotos[idc];
+            if (rc.tipo === "piloto") continue;
+            var ddx = rc.mesh.position.x - tz.malla.position.x;
+            var ddy = rc.mesh.position.y - tz.malla.position.y;
+            var ddz = rc.mesh.position.z - tz.malla.position.z;
+            if (ddx * ddx + ddy * ddy + ddz * ddz < 49) {
+              tz.activa = false; tz.malla.visible = false;
+              publicarGolpe(idc, "blas");
+              for (var ch = 0; ch < 5; ch++) {
+                colorAux.setHSL(0.09 + Math.random() * 0.05, 1, 0.65);
+                confeti.emitir(rc.mesh.position.x, rc.mesh.position.y + 0.8, rc.mesh.position.z,
+                  (Math.random() - 0.5) * 9, 2 + Math.random() * 3, (Math.random() - 0.5) * 9, 0.5, colorAux);
+              }
+              break;
+            }
+          }
+        }
+      }
+
       for (k = 0; k < explosiones.length; k++) {
         var ex = explosiones[k];
         if (!ex.activa) continue;
@@ -2120,7 +2304,16 @@ appId: "..."' style="resize:vertical;font-size:12px;font-family:ui-monospace,mon
       }
 
       /* camara */
-      if (soyPiloto && f !== "lobby") {
+      if (soyPiloto && torre.on && f !== "lobby") {
+        objetivoCam.set(pil.x + dirTorre.x * 3, pil.y - 4.8 + dirTorre.y * 3, pil.z + dirTorre.z * 3);
+        camera.position.lerp(objetivoCam, 1 - Math.exp(-dt * 20));
+        vAux.set(camera.position.x + dirTorre.x * 160, camera.position.y + dirTorre.y * 160, camera.position.z + dirTorre.z * 160);
+        miradaCam.lerp(vAux, 1 - Math.exp(-dt * 24));
+        camera.up.set(0, 1, 0);
+        camera.lookAt(miradaCam);
+        camera.fov += (56 - camera.fov) * Math.min(dt * 4, 1);
+        camera.updateProjectionMatrix();
+      } else if (soyPiloto && f !== "lobby") {
         objetivoCam.set(pil.x - fx * 46, pil.y - fy * 46 + 13, pil.z - fz * 46);
         camera.position.lerp(objetivoCam, 1 - Math.exp(-dt * 4.5));
         vAux.set(pil.x + fx * 90, pil.y + fy * 90, pil.z + fz * 90);
