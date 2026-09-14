@@ -825,8 +825,13 @@ appId: "..."' style="resize:vertical;font-size:12px;font-family:ui-monospace,mon
       if (!o.isMesh) return;
       var m = o.material;
       var mapa = (m && m.map) || null;
-      if (mapa) mapa.encoding = THREE.LinearEncoding;
-      o.material = new THREE.MeshPhongMaterial({ map: mapa, color: 0xffffff, shininess: 30, specular: 0x3c4248 });
+      /* el renderer saca sRGB, asi que la textura tiene que ir marcada igual
+         o los colores salen lavados */
+      if (mapa) { mapa.encoding = THREE.sRGBEncoding; mapa.needsUpdate = true; }
+      /* al separar las ruedas se perdieron las normales: sin ellas la luz da
+         cero en toda la carroceria y el coche se ve negro */
+      if (o.geometry && !o.geometry.attributes.normal) o.geometry.computeVertexNormals();
+      o.material = new THREE.MeshPhongMaterial({ map: mapa, color: 0xffffff, shininess: 26, specular: 0x2e343a });
       o.castShadow = false;
       o.receiveShadow = false;
     });
