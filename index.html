@@ -125,7 +125,7 @@
   <div class="caja">
     <div class="eyebrow">circuito compartido</div>
     <h1>Gran Premio<br><span class="acento">MADRING</span></h1>
-    <p class="intro">Tres vueltas al Madring con salida por semáforo, DRS en tres zonas, desgaste de neumáticos y parada en boxes. Crea la sala, reparte el código y corred a la vez.</p>
+    <p class="intro">Una vuelta lanzada al Madring con salida por semáforo, DRS en tres zonas, desgaste de neumáticos y parada en boxes. Crea la sala, reparte el código y corred a la vez.</p>
     <div id="config" class="oculto" style="background:#141C25;border:1px solid #33475A;border-radius:12px;padding:16px;margin-bottom:20px">
       <div style="font-weight:700;margin-bottom:6px">Conecta la base de datos</div>
       <p style="color:#8FA5B5;font-size:13px;line-height:1.55;margin:0 0 10px">
@@ -179,7 +179,7 @@ appId: "..."' style="resize:vertical;font-size:12px;font-family:ui-monospace,mon
         <button id="btnSalir" class="chip">Salir</button>
       </div>
       <div id="datos" class="oculto">
-        <span><span class="clave">vuelta </span><span id="txtVuelta">1/3</span></span>
+        <span><span class="clave">vuelta </span><span id="txtVuelta">1/1</span></span>
         <span><span class="clave">pos </span><span id="txtPos">1/1</span></span>
         <span id="txtTiempo">0:00.00</span>
         <span id="chipNeum" class="chipHud">M 100%</span>
@@ -256,6 +256,8 @@ appId: "..."' style="resize:vertical;font-size:12px;font-family:ui-monospace,mon
       <div id="zonaRol" style="margin-top:10px"></div>
       <div id="zonaSalida" style="margin-top:16px"></div>
       <button id="btnEnlace" class="secundario oculto" style="width:100%;margin-top:8px">Copiar enlace de invitación</button>
+      <button id="btnRecords" class="secundario" style="width:100%;margin-top:8px">Récords del Madring</button>
+      <div id="recordsLobby" class="clasif oculto" style="margin-top:10px"></div>
       <p id="notaLobby" class="nota centro">Pasa el código a quien quieras que corra contigo.</p>
     </div>
   </div>
@@ -265,6 +267,9 @@ appId: "..."' style="resize:vertical;font-size:12px;font-family:ui-monospace,mon
       <h2 style="font-size:26px;font-weight:900">Bandera a cuadros</h2>
       <p class="sutil" style="margin:4px 0 16px">Tu mejor vuelta: <span id="metaMejor" style="color:#FFC24B">--:--</span></p>
       <div id="clasificacion" class="clasif"></div>
+      <div id="zonaRecord" style="margin-top:14px"></div>
+      <p class="sutil" style="margin:16px 0 6px">Récords del Madring</p>
+      <div id="tablaRecords" class="clasif"></div>
       <div id="zonaRevancha" style="margin-top:18px"></div>
     </div>
   </div>
@@ -293,7 +298,8 @@ appId: "..."' style="resize:vertical;font-size:12px;font-family:ui-monospace,mon
   var COLORES = ["#FF5A3C", "#3FD8C8", "#FFC24B", "#A78BFA", "#7BE04F", "#FF7BC0", "#5AA9FF", "#F2EFE6"];
   var ALFABETO = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   var NOMBRE_META = "MADRING";
-  var VUELTAS = 3, N = 900, ANCHO = 8, VEL_MAX = 72, SUELO = -62;
+  var VUELTAS = 1, N = 900, ANCHO = 11, VEL_MAX = 72, SUELO = -62;
+  var CLAVE_RECORDS = "madring:records";
   var RAMPAS = [], CAJAS = [], TURBOS = [];
   /* zonas de DRS: [deteccion, apertura, cierre] en fraccion de vuelta */
   var DRS = [[0.900, 0.975, 0.100], [0.300, 0.345, 0.392], [0.672, 0.720, 0.766]];
@@ -832,7 +838,7 @@ appId: "..."' style="resize:vertical;font-size:12px;font-family:ui-monospace,mon
          cero en toda la carroceria y el coche se ve negro */
       if (o.geometry && !o.geometry.attributes.normal) o.geometry.computeVertexNormals();
       o.material = new THREE.MeshPhongMaterial({ map: mapa, color: 0xffffff, shininess: 26, specular: 0x2e343a });
-      o.castShadow = false;
+      o.castShadow = true;
       o.receiveShadow = false;
     });
     return raiz;
@@ -1014,13 +1020,15 @@ appId: "..."' style="resize:vertical;font-size:12px;font-family:ui-monospace,mon
     var calidad = esMovil ? 1.2 : Math.min(window.devicePixelRatio || 1, 2);
     renderer.setPixelRatio(calidad);
     renderer.outputEncoding = THREE.sRGBEncoding;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.12;
     renderer.shadowMap.enabled = !esMovil;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
     var scene = new THREE.Scene();
     var niebla = 0xb0a89c;
     scene.background = new THREE.Color(niebla);
-    scene.fog = new THREE.Fog(niebla, 320, 1700);
+    scene.fog = new THREE.Fog(niebla, 620, 3200);
     scene.add(new THREE.Mesh(new THREE.SphereGeometry(2600, 24, 16),
       new THREE.MeshBasicMaterial({ map: texturaCielo(), side: THREE.BackSide, fog: false })));
     scene.add(new THREE.HemisphereLight(0xbed4ee, 0x3d4636, 0.72));
@@ -1065,6 +1073,7 @@ appId: "..."' style="resize:vertical;font-size:12px;font-family:ui-monospace,mon
 
     var m4 = new THREE.Matrix4(), q0 = new THREE.Quaternion(), q1 = new THREE.Quaternion(), uno = new THREE.Vector3(1, 1, 1);
     var texAsf = texturaAsfalto();
+    texAsf.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
     var asfalto = new THREE.MeshLambertMaterial({ map: texAsf, color: 0xffffff, side: THREE.DoubleSide });
     var hierba = new THREE.MeshLambertMaterial({ color: 0x445c3a, side: THREE.DoubleSide });
     var arena = new THREE.MeshLambertMaterial({ color: 0x93805c, side: THREE.DoubleSide });
@@ -1080,12 +1089,88 @@ appId: "..."' style="resize:vertical;font-size:12px;font-family:ui-monospace,mon
     });
     scene.add(cinta(muestras, lados, -ANCHO - 8.2, ANCHO + 8.2, -0.28, arena, null, null, TROZOS, true));
     scene.add(cinta(muestras, lados, -ANCHO, ANCHO, 0, asfalto, null, null, TROZOS, true));
+    /* radio de giro en cada muestra: manda donde van pianos y escapatorias */
+    var radios = [];
+    for (i = 0; i < N; i++) {
+      var pA = muestras[(i - 4 + N) % N], pB = muestras[i], pC = muestras[(i + 4) % N];
+      var lA = pA.distanceTo(pB), lB2 = pB.distanceTo(pC), lC = pA.distanceTo(pC);
+      var area = Math.abs((pB.x - pA.x) * (pC.z - pA.z) - (pC.x - pA.x) * (pB.z - pA.z)) / 2;
+      radios.push(area > 0.02 ? (lA * lB2 * lC) / (4 * area) : 99999);
+    }
+    var enCurva = function (i) { return radios[((i % N) + N) % N] < 260; };
+    var ladoBoxes = BOXES.off > 0 ? 1 : -1;
+    var zonaBoxes = function (i) {
+      var u = (((i % N) + N) % N) / N;
+      return BOXES.ini < BOXES.fin ? (u >= BOXES.ini && u <= BOXES.fin) : (u >= BOXES.ini || u <= BOXES.fin);
+    };
+    var curvaLenta = function (i) { return radios[((i % N) + N) % N] < 110; };
+
+    /* pianos solo en curva, y linea blanca continua en los bordes */
     [1, -1].forEach(function (lado) {
-      var a = lado * ANCHO, b = lado * (ANCHO + 1.4);
-      scene.add(cinta(muestras, lados, a, b, 0.05, rojo, function (i) { return Math.floor(i / 5) % 2 === 0; }, null, TROZOS));
-      scene.add(cinta(muestras, lados, a, b, 0.05, blanco, function (i) { return Math.floor(i / 5) % 2 === 1; }, null, TROZOS));
+      var a = lado * (ANCHO - 0.15), b = lado * (ANCHO + 1.7);
+      scene.add(cinta(muestras, lados, a, b, 0.05, rojo,
+        function (i) { return enCurva(i) && Math.floor(i / 4) % 2 === 0; }, null, TROZOS));
+      scene.add(cinta(muestras, lados, a, b, 0.05, blanco,
+        function (i) { return enCurva(i) && Math.floor(i / 4) % 2 === 1; }, null, TROZOS));
+      scene.add(cinta(muestras, lados, lado * (ANCHO - 0.5), lado * (ANCHO - 0.12), 0.045, blanco, null, null, TROZOS));
     });
-    scene.add(cinta(muestras, lados, -0.25, 0.25, 0.06, blanco, function (i) { return i % 16 < 8; }, null, TROZOS));
+
+    /* escapatoria de asfalto por fuera de las curvas */
+    var asfaltoEsc = new THREE.MeshLambertMaterial({ map: texAsf, color: 0x8f8b84, side: THREE.DoubleSide });
+    [1, -1].forEach(function (lado) {
+      scene.add(cinta(muestras, lados, lado * (ANCHO + 1.7), lado * (ANCHO + 17), -0.02, asfaltoEsc, enCurva, null, TROZOS));
+    });
+
+    /* muros, vallas de seguridad y pilas de neumaticos */
+    var geoMuro = new THREE.BoxGeometry(0.45, 1.1, 7.2);
+    var geoValla = new THREE.PlaneGeometry(7.2, 4.4);
+    var geoGoma = new THREE.CylinderGeometry(0.85, 0.85, 0.72, 8);
+    var matMuroA = new THREE.MeshLambertMaterial({ color: 0xe6e2d6 });
+    var matMuroB = new THREE.MeshLambertMaterial({ color: 0xc8402f });
+    var matValla = new THREE.MeshBasicMaterial({
+      color: 0x39424b, transparent: true, opacity: 0.3, side: THREE.DoubleSide, depthWrite: false
+    });
+    var matGoma = new THREE.MeshLambertMaterial({ color: 0x15191d });
+    for (i = 0; i < N; i += 6) {
+      var hayCurva = enCurva(i);
+      var dMuro = ANCHO + (hayCurva ? 19.5 : 9.5);
+      var pM = muestras[i], sM = lados[i], rM = rumboEn(i);
+      for (var lad = -1; lad <= 1; lad += 2) {
+        if (lad === ladoBoxes && zonaBoxes(i)) continue;
+        var muro = new THREE.Mesh(geoMuro, (Math.floor(i / 12) % 2) ? matMuroA : matMuroB);
+        muro.position.set(pM.x + sM.x * lad * dMuro, pM.y + 0.55, pM.z + sM.z * lad * dMuro);
+        muro.rotation.y = rM;
+        scene.add(muro);
+        if (i % 18 === 0) {
+          var valla = new THREE.Mesh(geoValla, matValla);
+          valla.position.set(pM.x + sM.x * lad * (dMuro + 0.4), pM.y + 3.2, pM.z + sM.z * lad * (dMuro + 0.4));
+          valla.rotation.y = rM + Math.PI / 2;
+          scene.add(valla);
+        }
+        if (curvaLenta(i) && i % 12 === 0) {
+          for (var pil = 0; pil < 3; pil++) {
+            var dg = dMuro - 1.8 - pil * 1.75;
+            var goma = new THREE.Mesh(geoGoma, matGoma);
+            goma.position.set(pM.x + sM.x * lad * dg, pM.y + 0.36, pM.z + sM.z * lad * dg);
+            scene.add(goma);
+          }
+        }
+      }
+    }
+
+    /* paneles de frenada antes de cada curva lenta */
+    var geoPanel = new THREE.BoxGeometry(2.4, 2.4, 0.18);
+    for (i = 0; i < N; i++) {
+      if (!curvaLenta(i) || curvaLenta(i - 1)) continue;
+      [18, 9].forEach(function (atras) {
+        var ic = (i - atras + N) % N, pc = muestras[ic], sc = lados[ic];
+        if (ladoBoxes === 1 && zonaBoxes(ic)) return;
+        var panel = new THREE.Mesh(geoPanel, atras > 12 ? matMuroA : matMuroB);
+        panel.position.set(pc.x + sc.x * (ANCHO + 5), pc.y + 2, pc.z + sc.z * (ANCHO + 5));
+        panel.rotation.y = rumboEn(ic);
+        scene.add(panel);
+      });
+    }
     scene.add(cinta(muestras, lados, -ANCHO, ANCHO, 0.07,
       new THREE.MeshBasicMaterial({ map: texturaCuadros() }), function (i) { return i < 2; }));
 
@@ -1131,7 +1216,7 @@ appId: "..."' style="resize:vertical;font-size:12px;font-family:ui-monospace,mon
     var publicoMat = new THREE.MeshLambertMaterial({ map: texturaPublico() });
     [1, -1].forEach(function (lado) {
       for (var k = 0; k < 3; k++) {
-        var i = (10 + k * 16) % N, p = muestras[i], s = lados[i], d = lado * (ANCHO + 12);
+        var i = (80 + k * 190) % N, p = muestras[i], s = lados[i], d = lado * (ANCHO + 26);
         var grada = new THREE.Group();
         var base = new THREE.Mesh(new THREE.BoxGeometry(26, 10, 9), new THREE.MeshLambertMaterial({ color: 0xececdf }));
         base.position.y = 5; grada.add(base);
@@ -1147,7 +1232,7 @@ appId: "..."' style="resize:vertical;font-size:12px;font-family:ui-monospace,mon
 
     /* vallas con el nombre */
     var vallaMat = new THREE.MeshBasicMaterial({ map: texturaCartel(), side: THREE.DoubleSide });
-    [60, 130, 200, 275, 350, 430, 500, 575, 640, 710, 780, 860].forEach(function (i, k) {
+    [60, 130, 200, 275, 350, 430, 500, 575, 640, 710, 760, 800].forEach(function (i, k) {
       var p = muestras[i], s = lados[i], lado = k % 2 ? 1 : -1;
       var gigante = k % 3 === 0;
       var ancho = gigante ? 46 : 26, alto = gigante ? 12 : 6.5;
@@ -1479,6 +1564,9 @@ appId: "..."' style="resize:vertical;font-size:12px;font-family:ui-monospace,mon
     } else {
       d.vol = mis.vol || 0;
       d.trN = mis.trN || 0; d.trU = mis.trU || 0; d.trOff = mis.trOff || 0;
+      /* posicion y giro reales: sin esto los rivales van sobre rail y se atraviesan */
+      d.px = mis.px || 0; d.py = mis.py || 0; d.pz = mis.pz || 0;
+      d.ryaw = mis.ryaw || 0; d.rpit = mis.rpit || 0; d.rrol = mis.rrol || 0;
     }
     refYo.update(d);
   }
@@ -1531,6 +1619,76 @@ appId: "..."' style="resize:vertical;font-size:12px;font-family:ui-monospace,mon
     $("mandos").classList.toggle("oculto", !((fase === "corriendo" || fase === "intro") && miRol !== "piloto"));
   }
 
+  /* ===================== tabla de records ===================== */
+  function leerRecords() {
+    try { return JSON.parse(localStorage.getItem(CLAVE_RECORDS) || "[]"); }
+    catch (e) { return []; }
+  }
+
+  function guardarRecord(nombre, ms) {
+    var lista = leerRecords();
+    lista.push({ n: String(nombre || "Piloto").slice(0, 16), ms: ms, f: Date.now() });
+    lista.sort(function (a, b) { return a.ms - b.ms; });
+    lista = lista.slice(0, 10);
+    try { localStorage.setItem(CLAVE_RECORDS, JSON.stringify(lista)); } catch (e) {}
+    return lista;
+  }
+
+  function pintarRecords(destino) {
+    var lista = leerRecords();
+    destino.innerHTML = "";
+    if (!lista.length) {
+      var vacio = document.createElement("p");
+      vacio.className = "nota centro";
+      vacio.textContent = "Todavía no hay ninguna vuelta guardada.";
+      destino.appendChild(vacio);
+      return;
+    }
+    lista.forEach(function (r, i) {
+      var fila = document.createElement("div");
+      var izq = document.createElement("span");
+      var dorsal = document.createElement("span");
+      dorsal.className = "dorsal" + (i === 0 ? " oro" : "");
+      dorsal.textContent = String(i + 1);
+      var nom = document.createElement("span");
+      nom.textContent = r.n;
+      izq.appendChild(dorsal); izq.appendChild(nom);
+      var der = document.createElement("span");
+      der.className = "tiempo";
+      der.textContent = reloj(r.ms);
+      fila.appendChild(izq); fila.appendChild(der);
+      destino.appendChild(fila);
+    });
+  }
+
+  function prepararRecord() {
+    var zona = $("zonaRecord");
+    zona.innerHTML = "";
+    if (!mis.mejor) return;
+    var lista = leerRecords();
+    if (lista.length >= 10 && mis.mejor >= lista[lista.length - 1].ms) return;
+    var titulo = document.createElement("p");
+    titulo.className = "nota centro";
+    titulo.textContent = "Vuelta para la tabla. Pon tu nombre:";
+    var campo = document.createElement("input");
+    campo.className = "campo";
+    campo.maxLength = 16;
+    campo.value = yo.nombre || "";
+    var boton = document.createElement("button");
+    boton.className = "primario";
+    boton.style.width = "100%";
+    boton.style.marginTop = "8px";
+    boton.textContent = "Guardar " + reloj(mis.mejor);
+    boton.onclick = function () {
+      guardarRecord(campo.value.trim() || yo.nombre || "Piloto", mis.mejor);
+      zona.innerHTML = "";
+      pintarRecords($("tablaRecords"));
+    };
+    zona.appendChild(titulo);
+    zona.appendChild(campo);
+    zona.appendChild(boton);
+  }
+
   function aplicarFase() {
     $("panelLobby").classList.toggle("oculto", fase !== "lobby");
     $("panelMeta").classList.toggle("oculto", fase !== "meta");
@@ -1538,7 +1696,11 @@ appId: "..."' style="resize:vertical;font-size:12px;font-family:ui-monospace,mon
     $("tacometro").classList.toggle("oculto", fase === "lobby");
     $("datos").classList.toggle("oculto", fase === "lobby");
     $("mejorVuelta").classList.toggle("oculto", fase === "lobby");
-    if (fase === "meta") $("metaMejor").textContent = reloj(mis.mejor);
+    if (fase === "meta") {
+      $("metaMejor").textContent = reloj(mis.mejor);
+      prepararRecord();
+      pintarRecords($("tablaRecords"));
+    }
     aplicarRol();
     pintarObjeto();
   }
@@ -1688,6 +1850,18 @@ appId: "..."' style="resize:vertical;font-size:12px;font-family:ui-monospace,mon
     conectarSala(c);
     buclePublicar();
   }
+
+  $("btnRecords").onclick = function () {
+    var caja = $("recordsLobby");
+    if (caja.classList.contains("oculto")) {
+      pintarRecords(caja);
+      caja.classList.remove("oculto");
+      $("btnRecords").textContent = "Ocultar récords";
+    } else {
+      caja.classList.add("oculto");
+      $("btnRecords").textContent = "Récords del Madring";
+    }
+  };
 
   $("btnCrear").onclick = function () {
     encenderAudio();
@@ -1897,7 +2071,7 @@ appId: "..."' style="resize:vertical;font-size:12px;font-family:ui-monospace,mon
       idx: 0, prevIdx: 0, vuelta: 0, alt: 0, fuera: false, turbo: 0, ultimoPad: -1, vy: 0, aire: false
     };
     var enRampa = -1, giroLoco = 0, usoPrev = 0;
-    var neum = 1, vidaN = 1, enBoxes = false, paradaT = 0, desvioPrev = 0;
+    var neum = 1, vidaN = 1, enBoxes = false, paradaT = 0, desvioPrev = 0, ultimoChoque = 0;
     var drsAbierto = false, drsZona = -1, drsPermiso = false, tramoActual = -1;
 
     function colocarEnParrilla() {
@@ -2559,6 +2733,8 @@ appId: "..."' style="resize:vertical;font-size:12px;font-family:ui-monospace,mon
       mis.vuelta = coche.vuelta;
       mis.total = Math.max(0, coche.vuelta + mis.u);
       mis.vel = Math.abs(coche.vLong);
+      mis.px = coche.pos.x; mis.py = coche.alt; mis.pz = coche.pos.z;
+      mis.ryaw = coche.rumbo; mis.rpit = 0; mis.rrol = 0;
       mis.off = Math.max(-ANCHO, Math.min(ANCHO, desvio));
 
       if (corre) {
@@ -2676,6 +2852,10 @@ appId: "..."' style="resize:vertical;font-size:12px;font-family:ui-monospace,mon
             if (j.trN && j.trN !== r.trN) { r.trN = j.trN; ponerMina(j.id, j.trU || 0, j.trOff || 0); }
             if (Math.abs(r.objetivo - r.mostrado) > 0.12) r.mostrado = r.objetivo;
           }
+          if (tipoJ !== "piloto") {
+            r.px = j.px || 0; r.py = j.py || 0; r.pz = j.pz || 0;
+            r.ryaw = j.ryaw || 0; r.rpit = 0; r.rrol = 0;
+          }
           if (tipoJ === "piloto") {
             r.px = j.px || 0; r.py = j.py || 60; r.pz = j.pz || 0;
             r.ryaw = j.ryaw || 0; r.rpit = j.rpit || 0; r.rrol = j.rrol || 0;
@@ -2713,10 +2893,48 @@ appId: "..."' style="resize:vertical;font-size:12px;font-family:ui-monospace,mon
         var uu = ((rr.mostrado % 1) + 1) % 1;
         var ii = Math.min(N - 1, Math.floor(uu * N));
         var pp = muestras[ii], ll = lados[ii];
-        rr.mesh.position.set(pp.x + ll.x * rr.off, pp.y + 0.06, pp.z + ll.z * rr.off);
+        if (rr.px || rr.pz) {
+          vAux.set(rr.px, rr.py, rr.pz);
+          if (rr.mesh.position.distanceTo(vAux) > 70) rr.mesh.position.copy(vAux);
+          else rr.mesh.position.lerp(vAux, 1 - Math.exp(-dt * 22));
+          var dyR = ((rr.ryaw - rr.yawVis + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+          rr.yawVis += dyR * (1 - Math.exp(-dt * 22));
+        } else {
+          rr.mesh.position.set(pp.x + ll.x * rr.off, pp.y + 0.06, pp.z + ll.z * rr.off);
+          rr.yawVis = rumboEn(ii);
+        }
+        /* la altura viaja por la red y llega a saltos: la sacamos del propio
+           asfalto para que el rival no flote ni se hunda al ir pegados */
+        if (!rr.vol) {
+          var yPista = pp.y + 0.06;
+          rr.mesh.position.y += (yPista - rr.mesh.position.y) * (1 - Math.exp(-dt * 12));
+        }
+        var pendR = Math.atan2(muestras[(ii + 7) % N].y - muestras[(ii - 7 + N) % N].y, 26);
         rr.mesh.rotation.order = "YXZ";
-        rr.mesh.rotation.set(0, rumboEn(ii), rr.vol ? ((ahora / 110) % 6.283) : 0);
+        rr.mesh.rotation.set(-pendR, rr.yawVis, rr.vol ? ((ahora / 110) % 6.283) : 0);
         rr.mesh.userData.ruedas.forEach(function (w2) { w2.rotation.x += (rr.vel * dt) / 0.36; });
+
+        /* contacto rueda con rueda: los coches ya no se atraviesan */
+        if (corre && !soyPiloto && !mis.terminado) {
+          vAux2.set(rr.mesh.position.x - coche.pos.x, 0, rr.mesh.position.z - coche.pos.z);
+          var sep = vAux2.length();
+          if (sep > 0.05 && sep < 4.4) {
+            vAux2.multiplyScalar(1 / sep);
+            var empuje = (4.4 - sep) * 0.55;
+            coche.pos.x -= vAux2.x * empuje;
+            coche.pos.z -= vAux2.z * empuje;
+            var cierre = coche.vLong * (frenteV.x * vAux2.x + frenteV.z * vAux2.z);
+            if (cierre > 3) {
+              coche.vLong *= 0.84;
+              coche.giro += (Math.random() - 0.5) * 0.12;
+              if (ahora - ultimoChoque > 300) {
+                ultimoChoque = ahora;
+                sacudidaExtra = Math.min(1.5, 0.3 + cierre * 0.02);
+                if (audio) audio.pitido(120 + Math.random() * 60, 0.13, 0.22);
+              }
+            }
+          }
+        }
       }
 
       /* aviones MARIO */
@@ -2887,8 +3105,10 @@ appId: "..."' style="resize:vertical;font-size:12px;font-family:ui-monospace,mon
           radio = 14; altura = 5.5;
         }
         if (camara === "cabina" && f === "corriendo") {
-          objetivoCam.copy(coche.pos).addScaledVector(frenteV, 0.3);
-          objetivoCam.y = coche.alt + 1.6;
+          /* a la altura real del casco, justo detras del halo */
+          objetivoCam.copy(coche.pos).addScaledVector(frenteV, 0.1);
+          objetivoCam.addScaledVector(derechaV, -angDeriva * 0.45);
+          objetivoCam.y = coche.alt + 1.04;
         } else {
           objetivoCam.set(coche.pos.x + Math.sin(ang) * radio, coche.alt + altura, coche.pos.z + Math.cos(ang) * radio);
         }
@@ -2899,10 +3119,17 @@ appId: "..."' style="resize:vertical;font-size:12px;font-family:ui-monospace,mon
           camera.position.x += (Math.random() - 0.5) * sacudida;
           camera.position.y += (Math.random() - 0.5) * sacudida;
         }
-        vAux.copy(coche.pos).addScaledVector(frenteV, camara === "cabina" ? 26 : 13);
-        vAux.y = coche.alt + 1.5;
+        if (camara === "cabina") {
+          /* la vista se va hacia donde sigue la pista, como mira un piloto */
+          vAux.copy(coche.pos).addScaledVector(frenteV, 32);
+          vAux.lerp(muestras[(coche.idx + 30) % N], 0.42);
+          vAux.y = coche.alt + 1.15;
+        } else {
+          vAux.copy(coche.pos).addScaledVector(frenteV, 13);
+          vAux.y = coche.alt + 1.5;
+        }
         miradaCam.lerp(vAux, 1 - Math.exp(-dt * 9));
-        var balanceo = -(coche.giro * 0.06 + angDeriva * 0.16) * rapidez;
+        var balanceo = -(coche.giro * 0.06 + angDeriva * 0.16) * rapidez * (camara === "cabina" ? 1.5 : 1);
         if (balanceo > 0.1) balanceo = 0.1;
         if (balanceo < -0.1) balanceo = -0.1;
         vAux2.copy(frenteV).normalize();
@@ -2910,7 +3137,7 @@ appId: "..."' style="resize:vertical;font-size:12px;font-family:ui-monospace,mon
         if (arribaCam.y < 0.2) arribaCam.set(0, 1, 0);
         camera.up.copy(arribaCam);
         camera.lookAt(miradaCam);
-        var fovObjetivo = 58 + rapidez * 22 + (coche.turbo > 0 ? 12 : 0) - (1 - e) * 10;
+        var fovObjetivo = (camara === "cabina" ? 66 : 58) + rapidez * 22 + (drsAbierto ? 6 : 0) - (1 - e) * 10;
         camera.fov += (fovObjetivo - camera.fov) * Math.min(dt * 4, 1);
         camera.updateProjectionMatrix();
       }
