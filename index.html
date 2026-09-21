@@ -284,7 +284,11 @@ function H(x,z){
   const e=Math.max(Math.abs(x),Math.abs(z)); if(e>HALF-140) h*=1-smooth(HALF-140,HALF,e);
   return h;
 }
-const GY=(x,z)=>(Math.abs(x)<HALF&&Math.abs(z)<HALF)?H(x,z):0;
+let TH=null;const TSEG=256,TSTEP=S/TSEG;
+function meshH(x,z){if(!TH)return H(x,z);const fx=(x+HALF)/TSTEP,fz=(z+HALF)/TSTEP;const ix=clamp(Math.floor(fx),0,TSEG-1),iz=clamp(Math.floor(fz),0,TSEG-1);const u=fx-ix,v=fz-iz;
+  const W=TSEG+1,ha=TH[iz*W+ix],hd=TH[iz*W+ix+1],hb=TH[(iz+1)*W+ix],hc=TH[(iz+1)*W+ix+1];
+  return u+v<=1?ha+(hd-ha)*u+(hb-ha)*v:hc+(hb-hc)*(1-u)+(hd-hc)*(1-v);}
+const GY=(x,z)=>(Math.abs(x)<HALF&&Math.abs(z)<HALF)?meshH(x,z):0;
 const pondLevel=H(POND.x,POND.z)+2.1;
 
 const ANG=0.14, CA=Math.cos(ANG), SA=Math.sin(ANG), CU=240, CV=170;
@@ -510,7 +514,8 @@ const detailTex=new THREE.CanvasTexture(detail);detailTex.wrapS=detailTex.wrapT=
 await step(0.38,'Levantando relieve…');
 const SEG=256;
 const tGeo=new THREE.PlaneGeometry(S,S,SEG,SEG);tGeo.rotateX(-Math.PI/2);
-{const tp=tGeo.attributes.position;for(let i=0;i<tp.count;i++)tp.setY(i,H(tp.getX(i),tp.getZ(i)));tGeo.computeVertexNormals();}
+{const tp=tGeo.attributes.position;TH=new Float32Array((SEG+1)*(SEG+1));for(let i=0;i<tp.count;i++){const hh=H(tp.getX(i),tp.getZ(i));tp.setY(i,hh);
+  const ix=Math.round((tp.getX(i)+HALF)/TSTEP),iz=Math.round((tp.getZ(i)+HALF)/TSTEP);TH[iz*(SEG+1)+ix]=hh;}tGeo.computeVertexNormals();}
 const fieldTex=new THREE.CanvasTexture(fieldCanvas);fieldTex.anisotropy=renderer.capabilities.getMaxAnisotropy();
 const terrMat=new THREE.MeshLambertMaterial({map:fieldTex});
 terrMat.onBeforeCompile=sh=>{sh.uniforms.detailMap={value:detailTex};
@@ -897,16 +902,32 @@ function updateSoldiers(dt,t){for(const S_ of SOLDIERS){
     if(d<.8){S_.pi=(S_.pi+1)%S_.path.length;if(Math.random()<.3)S_.idle=MR(3,9);}
     else{S_.pos.x+=dx/d*S_.speed*dt;S_.pos.z+=dz/d*S_.speed*dt;const ty=Math.atan2(dx,dz);S_.yaw+=angDelta(S_.yaw,ty)*Math.min(1,dt*4);moving=true;}}
   else{S_.idle-=dt;S_.yaw+=Math.sin(t*.3+S_.phase*9)*dt*.15;}
-  S_.pos.y=H(S_.pos.x,S_.pos.z);
+  if(!S_.path&&!S_.panic&&S_===ENEMY.pilot){S_.mesh.position.set(S_.pos.x,S_.pos.y,S_.pos.z);continue;}S_.pos.y=GY(S_.pos.x,S_.pos.z);
   if(moving){const f=Math.floor((t*(S_.panic>0?3.2:1.9)+S_.phase)*2)%4;S_.mesh.geometry=SOLD_GEO[S_.v][f===0?'w1':f===2?'w2':'stand'];}else S_.mesh.geometry=SOLD_GEO[S_.v].stand;
   S_.mesh.position.set(S_.pos.x,S_.pos.y+(moving?Math.abs(Math.sin(t*6+S_.phase*6))*.03:0),S_.pos.z);S_.mesh.rotation.set(0,S_.yaw,0);}}
 
 /* ================= efectos de explosión ================= */
 const FX=[];
 const craterMat=new THREE.MeshLambertMaterial({color:0x2a231c,transparent:true,opacity:.85,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2});
-function explosionFX(p,big){
+const debrisGeo=new THREE.BoxGeometry(1,1,1);
+function makeFire(x,y,z,life,size){const arr=[];for(let i=0;i<10;i++){const s=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTex,color:0xff7a22,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending}));scene.add(s);arr.push({s,ph:Math.random()*6,ox:MR(-1,1)*size*.5,oz:MR(-1,1)*size*.5});}
+  const sm=makeSmoke(x,y+size,z,{count:18,color:0x2a2622,rise:3.5,grow:2.5,life:12,size:size*1.2,op:.7,wind:1.3,ttl:life});
+  const hm=new THREE.Mesh(new THREE.SphereGeometry(size*.7,8,6),heatMat(1));hm.position.set(x,y+.5,z);addHeat(hm,1);
+  FX.push({o:null,t:0,life,up(k){const f=1-smooth(.7,1,k);for(const a of arr){const fl=.7+.3*Math.sin(clockT*14+a.ph)+.2*Math.sin(clockT*23+a.ph*3);
+    a.s.position.set(x+a.ox,y+size*.35+Math.abs(Math.sin(clockT*3+a.ph))*size*.5,z+a.oz);a.s.scale.setScalar(size*(.9+fl*.5)*f+.01);a.s.material.opacity=f*.9;}
+    hm.material.color.setRGB(f,0,f);if(k>=1)arr.forEach(a=>{scene.remove(a.s);a.s.material.dispose();});}});}
+function debris(p,n,colors,speed,size){for(let i=0;i<n;i++){const m=new THREE.Mesh(debrisGeo,new THREE.MeshLambertMaterial({color:pick(colors)}));
+  m.scale.set(MR(.15,.6)*size,MR(.1,.35)*size,MR(.15,.6)*size);m.position.copy(p);m.castShadow=true;scene.add(m);
+  const v=new THREE.Vector3(MR(-1,1),MR(.6,1.6),MR(-1,1)).normalize().multiplyScalar(MR(.5,1)*speed);const rv=new THREE.Vector3(MR(-6,6),MR(-6,6),MR(-6,6));let rest=false;
+  FX.push({o:null,t:0,life:40,up(k){if(!rest){const dt=.016;v.y-=9.8*dt;m.position.addScaledVector(v,dt);m.rotation.x+=rv.x*dt;m.rotation.y+=rv.y*dt;m.rotation.z+=rv.z*dt;
+    const gy=GY(m.position.x,m.position.z);if(m.position.y<gy+.05){m.position.y=gy+.05;if(Math.abs(v.y)<2){rest=true;}else{v.y*=-.3;v.x*=.5;v.z*=.5;}}}
+    if(k>=1){scene.remove(m);m.material.dispose();}}});}}
+function explosionFX(p,big){if(big){debris(p,10,[0x2a2420,0x4a3a28,0x5b4a33],9,1);const gy=GY(p.x,p.z);makeFire(p.x,Math.max(gy,p.y-2),p.z,35,2.2);
+  for(let i=0;i<10;i++){const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTex,color:i%2?0xff5a10:0xffb040,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending}));
+    const d=new THREE.Vector3(MR(-1,1),MR(0,1.2),MR(-1,1)).normalize().multiplyScalar(MR(3,7));sp.position.copy(p);scene.add(sp);
+    FX.push({o:sp,t:0,life:MR(.6,1.1),up(k){sp.position.addScaledVector(d,.016*(1-k));sp.scale.setScalar(4+k*8);sp.material.opacity=(1-k);}});}}
   const fl=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTex,color:0xffd08a,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,fog:false}));
-  fl.position.copy(p);fl.scale.setScalar(big?22:12);scene.add(fl);FX.push({o:fl,t:0,life:.5,up(k){fl.material.opacity=1-k;fl.scale.setScalar((big?22:12)*(1+k*1.5));}});
+  fl.position.copy(p);fl.scale.setScalar(big?30:12);scene.add(fl);FX.push({o:fl,t:0,life:.5,up(k){fl.material.opacity=1-k;fl.scale.setScalar((big?22:12)*(1+k*1.5));}});
   for(let i=0;i<7;i++){const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:smokeTex,color:i<3?0xff9a40:0x3a342e,transparent:true,depthWrite:false}));
     const d=new THREE.Vector3(MR(-1,1),MR(.2,1.2),MR(-1,1)).normalize().multiplyScalar(MR(2,6));sp.position.copy(p);scene.add(sp);
     FX.push({o:sp,t:0,life:MR(1.2,2.5),up(k){sp.position.addScaledVector(d,.016*(1-k));sp.scale.setScalar(3+k*9);sp.material.opacity=(1-k)*.9;}});}
@@ -969,13 +990,14 @@ function setDroneVisual(d,dt){const o=d.obj;o.position.copy(d.pos);o.rotation.se
   const fly=d.state==='flying';o.userData.discs.forEach(c=>c.visible=fly);
   if(fly&&!d.voice&&AU.ctx)d.voice=droneVoice(d.team==='red'&&d.type==='fpv'?'strike':d.type);
   if(d.voice){if(fly)d.voice.set(d.pos,d.type==='fpv'?d.throttle:.5+d.vel.length()/30,d.type==='fpv'?1.6:1.3);else{d.voice.stop();d.voice=null;}}}
+function checkPilot(){if(MODE==='ia'&&ENEMY.pilot&&!ENEMY.pilot.alive&&!gameOver)endGame(true,'Has eliminado al piloto enemigo.');}
 function killDrone(d){d.state='dead';d.obj.visible=false;if(d.voice){d.voice.stop();d.voice=null;}}
 
 /* colisiones de drones */
 function droneHit(d){const p=d.pos,gy=GY(p.x,p.z);let hit=null;
   if(p.y<gy+.1)hit={what:'ground'};
   treesNear(p.x,p.z,8,t=>{if(hit)return;const dist=Math.hypot(t.x-p.x,t.z-p.z);
-    if(dist<.35&&p.y<t.y+t.h)hit={what:'tree'};else if(t.k!=='dead'&&dist<t.w*.32&&p.y>t.y+t.h*.32&&p.y<t.y+t.h*.97)hit={what:'tree'};});
+    const hs=Math.hypot(d.vel.x,d.vel.z);if(hs<4)return;if(dist<.22&&p.y<t.y+t.h*.85)hit={what:'tree',t};else if(t.k!=='dead'&&dist<t.w*.16&&p.y>t.y+t.h*.45&&p.y<t.y+t.h*.9)hit={what:'tree',t};});
   if(!hit)for(const h of HOUSE_COLL)if(Math.abs(h.x-p.x)<h.r+2&&Math.abs(h.z-p.z)<h.r+2&&Math.hypot(h.x-p.x,h.z-p.z)<h.r&&p.y<h.top){hit={what:'house'};break;}
   if(!hit)for(const B of BUNKERS){const l=B.w2l(p.x,p.z);if(Math.abs(l[0])<5.2&&l[1]>-4&&l[1]<3&&p.y<B.fy+2.9){hit={what:'bunker',B};break;}}
   if(!hit)for(const S_ of SOLDIERS)if(S_.alive&&Math.abs(S_.pos.x-p.x)<.9&&Math.abs(S_.pos.z-p.z)<.9&&p.y-S_.pos.y<1.9&&p.y>S_.pos.y-.2){hit={what:'soldier'};break;}
@@ -984,16 +1006,18 @@ function droneHit(d){const p=d.pos,gy=GY(p.x,p.z);let hit=null;
 function applyBlast(p,team){
   for(const S_ of SOLDIERS){const dd=Math.hypot(S_.pos.x-p.x,S_.pos.z-p.z),dy=Math.abs(S_.pos.y+1-p.y);
     if(S_.alive&&dd<7.5&&dy<6)killSoldier(S_);else if(S_.alive&&dd<45){S_.panic=MR(4,7);S_.panicDir=Math.atan2(S_.pos.x-p.x,S_.pos.z-p.z)+MR(-.5,.5);}}
-  for(const B of BUNKERS){if(!B.alive||B.team===team)continue;const dd=Math.hypot(B.x-p.x,B.z-p.z);if(dd<8&&p.y<B.fy+6)destroyBunker(B);}
+  for(const B of BUNKERS){if(!B.alive||B.team===team)continue;const dd=Math.hypot(B.x-p.x,B.z-p.z);if(dd<7&&p.y<B.fy+6)destroyBunker(B);}
+  for(const t of TREES)if(!t.hidden&&Math.abs(t.x-p.x)<5&&Math.abs(t.z-p.z)<5&&Math.hypot(t.x-p.x,t.z-p.z)<4.5&&p.y<t.y+t.h+2){hideTreesNear(t.x,t.z,.5);if(t.k!=='bush'&&t.k!=='reed'&&Math.random()<.5)makeFire(t.x,t.y+.3,t.z,25,1.4);}
+  for(const h of HOUSE_COLL)if(Math.hypot(h.x-p.x,h.z-p.z)<h.r+3&&p.y<h.top+2){makeFire(p.x,GY(p.x,p.z),p.z,50,2.5);debris(p,12,[0xe9e4d6,0x8f8b83,0x5b4632,0x7a8a86],10,1.1);break;}
   for(const o of DRONES)if((o.state==='ground'||o.state==='flying')&&o.pos.distanceTo(p)<5){explosionFX(o.pos,false);killDrone(o);if(o===ENEMY.recon)ENEMY.respawn=90;}
-  if(PL.alive&&mode!=='menu'){const eye=_v1.set(PL.pos.x,PL.pos.y+1.2,PL.pos.z);if(eye.distanceTo(p)<(myB&&myB.alive?7:9)&&team==='red'){PL.alive=false;endGame(false,'Una explosión te ha alcanzado.');}}}
+  if(PL.alive&&mode!=='menu'){const eye=_v1.set(PL.pos.x,PL.pos.y+1.2,PL.pos.z);if(eye.distanceTo(p)<6&&team==='red'){PL.alive=false;endGame(false,'Una explosión te ha alcanzado.');}}}
 function detonate(d,why){const p=d.pos.clone();const big=d.armed;killDrone(d);explosionFX(p,big);boom(p,big);if(big)applyBlast(p,d.team);if(d.team==='blue'&&NET.on)netBoom(p,big);
   if(d===active)feedLost(big?'IMPACTO':'SEÑAL PERDIDA',why);}
-function destroyBunker(B){B.alive=false;B.group.scale.y=.45;B.group.position.y-=.3;explosionFX(new THREE.Vector3(B.x,B.fy+1.5,B.z),true);
+function destroyBunker(B){B.alive=false;B.group.scale.y=.45;B.group.position.y-=.3;const bp=new THREE.Vector3(B.x,B.fy+1.5,B.z);explosionFX(bp,true);debris(bp,26,[0x6b5236,0x5a4430,0x5b4a33,0x4b5536,0x7a5f40],12,1.6);makeFire(B.x,B.fy,B.z,70,3);
   makeSmoke(B.x,B.fy+1,B.z,{count:26,color:0x2b2724,rise:4,grow:3,life:22,size:4,op:.7,wind:1.5});
   B.heatGen.material.color.setRGB(1,0,1);B.heatRoof.material.color.setRGB(1,0,1);if(B.light)B.light.intensity=0;
-  if(B===enemyB)endGame(true,'Tu FPV ha impactado de lleno en el búnker enemigo.');
-  else if(B===myB)endGame(false,PL.inside?'El FPV enemigo ha entrado por la puerta del búnker.':'Han destruido tu búnker. Sin estación de control no puedes seguir.');}
+  if(B===enemyB){toast('¡Búnker enemigo destruido! Ahora acaba con el piloto.');if(ENEMY.pilot&&ENEMY.pilot.alive&&Math.hypot(ENEMY.pilot.pos.x-B.x,ENEMY.pilot.pos.z-B.z)<5)killSoldier(ENEMY.pilot);}
+  else if(B===myB)toast('¡Tu búnker ha sido destruido! Sigues vivo: escóndete.',true);}
 
 /* ================= vuelo ================= */
 const keys={};let mdx=0,mdy=0,mouseDown=false,wheel=0;
@@ -1004,12 +1028,12 @@ function updateFPV(d,dt,ctrl){
     d.pitch=clamp(d.pitch-mdy*.0018*sens+((keys.ArrowUp?1:0)-(keys.ArrowDown?1:0))*1.2*dt,-1.3,.9);if(!mdy&&!keys.ArrowUp&&!keys.ArrowDown&&d.pitch>-.5)d.pitch*=Math.exp(-.8*dt);
     d.throttle=clamp(d.throttle+((keys.KeyW?1:0)-(keys.KeyS?1:0)+JOY.y)*.7*dt,0,1);}
   else{d.throttle=Math.max(0,d.throttle-dt*.4);d.roll*=.95;}
-  if(d.state==='ground'){if(d.throttle>.15){d.state='flying';d.vel.set(0,2.5,0);d.pitch=Math.max(d.pitch,.8);if(d.team==='blue')launchNoise(d);}return;}
+  if(d.state==='ground'){if(ctrl&&(keys.ShiftLeft||keys.ShiftRight||keys.Space||d.throttle>.15)){d.state='flying';d.throttle=0;d.vel.set(0,4,0);d.pitch=0;if(d.team==='blue')launchNoise(d);}return;}
   if(d.state!=='flying')return;
   d.flightT+=dt;d.battery-=dt*(.0016+d.throttle*.0042);const cur=1.5+d.throttle*55;d.mah+=cur*dt/3.6;d.current=cur;
   const dir=dirOf(d.yaw,d.pitch,_v1);const tgt=_v2.copy(dir).multiplyScalar(d.throttle*33);
-  tgt.y+=(ctrl&&keys.Space?7:0)-(ctrl&&(keys.ShiftLeft||keys.ShiftRight||keys.KeyC)?7:0);if(!ctrl)tgt.y-=6;if(d.battery<=0)tgt.y=-15;
-  d.vel.lerp(tgt,1-Math.exp(-3.2*dt));d.pos.addScaledVector(d.vel,dt);
+  tgt.y+=(ctrl&&(keys.Space||keys.ShiftLeft||keys.ShiftRight)?8:0)-(ctrl&&(keys.KeyC||keys.KeyQ)?7:0);if(!ctrl)tgt.y-=6;if(d.battery<=0)tgt.y=-15;
+  d.vel.lerp(tgt,1-Math.exp(-4.5*dt));d.pos.addScaledVector(d.vel,dt);
   const hit=droneHit(d);
   if(hit){const sp=d.vel.length();
     if(hit.what==='ground'&&sp<7.5&&!d.armed){const gy=GY(d.pos.x,d.pos.z);d.pos.y=gy+.1;d.vel.y=Math.max(0,d.vel.y);d.vel.x*=.9;d.vel.z*=.9;}
@@ -1109,7 +1133,7 @@ function updatePlayer(dt){
     for(const h of HOUSE_COLL){const dx=PL.pos.x-h.x,dz=PL.pos.z-h.z,d=Math.hypot(dx,dz);if(d<h.r&&d>0){PL.pos.x=h.x+dx/d*h.r;PL.pos.z=h.z+dz/d*h.r;}}}
   PL.pos.x=clamp(PL.pos.x,-HALF+2,HALF-2);PL.pos.z=clamp(PL.pos.z,-HALF+2,HALF-2);
   const inAny=BUNKERS.find(B=>{const q=B.w2l(PL.pos.x,PL.pos.z);return Math.abs(q[0])<2.95&&Math.abs(q[1])<2.65;});
-  PL.pos.y=inAny?inAny.fy:H(PL.pos.x,PL.pos.z);
+  PL.pos.y=inAny?inAny.fy:GY(PL.pos.x,PL.pos.z);
   camera.position.set(PL.pos.x,PL.pos.y+1.62+(sp?Math.sin(PL.bob)*.035:0),PL.pos.z);camera.rotation.set(PL.pitch,PL.yaw,0);
   if(AU.ctx)AU.muffle.frequency.setTargetAtTime(PL.inside?650:20000,AU.ctx.currentTime,.15);}
 
@@ -1198,7 +1222,7 @@ function drawFPVOSD(d){const [fx,fy,fw,fh]=fitRect(4/3);ox.clearRect(0,0,osd.wid
     else{const rr=angDelta(d.yaw,Math.atan2(-(MARK.x-d.pos.x),-(MARK.z-d.pos.z)));T((rr>0?'◄ ':'')+'OBJ '+dist+'M'+(rr<=0?' ►':''),fx+fw/2,fy+fh*.22,'center');}}
   if(d.battery<.2&&Math.floor(clockT*2)%2)T('BATERIA BAJA',fx+fw/2,fy+fh*.34,'center');
   if((d.noise||0)>.45)T('SEÑAL DEBIL',fx+fw/2,fy+fh*.4,'center');
-  if(d.state==='ground'||d.flightT<4)T(d.state==='ground'?'W: ACELERAR PARA DESPEGAR':'SUBE POR ENCIMA DE LOS ARBOLES',fx+fw/2,fy+fh*.72,'center');}
+  if(d.state==='ground'||d.flightT<4)T(d.state==='ground'?'MAYUS: DESPEGAR Y SUBIR':'SUBE CON MAYUS POR ENCIMA DE LOS ARBOLES',fx+fw/2,fy+fh*.72,'center');}
 function drawReconOSD(d){const [fx,fy,fw,fh]=fitRect(16/9);ox.clearRect(0,0,osd.width,osd.height);if(!d)return;
   const fs=Math.max(13,Math.round(fh/34));ox.font=`500 ${fs}px 'Saira Condensed', sans-serif`;ox.fillStyle='#fff';ox.strokeStyle='rgba(0,0,0,.6)';ox.lineWidth=3;
   const L=fx+fs*1.2,Rr=fx+fw-fs*1.2,Tp=fy+fs*1.8,Bt=fy+fh-fs*1.2;
@@ -1224,7 +1248,7 @@ function groundUnderReticle(d){const o=dcam.position,dir=_v2.set(0,0,-1).applyQu
 const hudEl=$('#hud'),objt=$('#objt'),detb=$('#detb'),detp=$('#detp'),detEl=$('#det'),detl=$('#detl'),promptEl=$('#prompt'),invt=$('#invt'),fpsEl=$('#fps'),keyhelp=$('#keyhelp');
 let toastT=0;function toast(msg,warn){const t=$('#toast');t.textContent=msg;t.className=warn?'warn':'';t.style.opacity=1;toastT=warn?5:3.2;}
 const HELP={walk:'<b>W A S D</b> moverse · <b>Shift</b> correr<br><b>E</b> interactuar<br><b>Esc</b> pausa',
-  fpv:'<b>Ratón</b> dirección · <b>W / S</b> acelerador<br><b>A / D</b> girar · <b>Espacio / Shift</b> subir y bajar<br>Mantiene la altura solo<br><b>R</b> armar · <b>Clic o F</b> detonar<br><b>X</b> volver al búnker',
+  fpv:'<b>Ratón</b> dirección · <b>W / S</b> acelerador<br><b>A / D</b> girar · <b>Mayús o Espacio</b> subir · <b>C</b> bajar<br>Despega con Mayús y sube recto<br><b>R</b> armar · <b>Clic o F</b> detonar<br><b>X</b> volver al búnker',
   recon:'<b>W A S D</b> mover · <b>Espacio</b> subir · <b>Q</b> bajar<br><b>Ratón</b> cámara · <b>T</b> térmica<br><b>Rueda o Z</b> zoom · <b>Clic o M</b> marcar<br><b>H</b> volver a casa · <b>L</b> aterrizar · <b>X</b> salir'};
 function setHUDMode(m){document.body.classList.toggle('feed',m==='fpv'||m==='recon');buildTouchButtons(m);hudEl.classList.toggle('hidden',!(m==='walk'||m==='fpv'||m==='recon'));
   const walk=m==='walk';['#obj','#prompt','#inv','#mmwrap','#cross'].forEach(s=>$(s).style.visibility=walk?'':'hidden');keyhelp.innerHTML=HELP[m]||'';
@@ -1341,12 +1365,13 @@ function startGame(){const s=PC.sel;ghost.visible=false;$('#placeui').classList.
   for(let i=0;i<3;i++)spawnSoldier('red',vp[i][0],vp[i][1],{path:vp.slice(i).concat(vp.slice(0,i)),speed:1.2});
   const rp=[];for(let i=60;i<ROADS[1].s.length-20;i+=12)rp.push([ROADS[1].s[i].x+2,ROADS[1].s[i].z]);const rp2=rp.concat(rp.slice().reverse());
   spawnSoldier('red',rp[0][0],rp[0][1],{path:rp2});spawnSoldier('red',rp[3][0]+1.5,rp[3][1],{path:rp2.slice(3).concat(rp2.slice(0,3))});
+  {const q=eb.l2w(.5,-.5);ENEMY.pilot=spawnSoldier('red',q[0],q[1],{yaw:eb.yaw});ENEMY.pilot.pos.y=eb.fy;}
   ENEMY.respawn=40;
   const w=myB.l2w(0,1.6);PL.pos.set(w[0],myB.fy,w[1]);PL.yaw=myB.yaw;PL.pitch=-.1;
   mode='walk';stats.t0=clockT;setHUDMode('walk');sizeMM();lock();
   toast('Estás dentro del búnker. Armario a la izquierda, dron de vigilancia a la derecha, PC al fondo.');}
 function endGame(win,why){if(gameOver)return;gameOver=true;NET.lost=!win;if(NET.on)netPublish(true);unlock();const e=$('#end');e.className=win?'win':'lose';
-  $('#endt').textContent=win?`Búnker de ${TEAMS[team].enemy} destruido`:'Partida perdida';$('#endp').textContent=why;
+  $('#endt').textContent=win?`Victoria contra ${TEAMS[team].enemy}`:'Partida perdida';$('#endp').textContent=why;
   $('#es1').textContent=stats.kills;$('#es2').textContent=stats.kamis;$('#es3').textContent=fmtT(clockT-stats.t0).replace(/^0/,'');
   setTimeout(()=>{e.classList.remove('hidden');},win?1500:900);}
 
@@ -1376,7 +1401,7 @@ function moveJoy(e){const r=joyEl.getBoundingClientRect();let dx=(e.clientX-r.le
   const l=Math.hypot(dx,dy);if(l>1){dx/=l;dy/=l;}JOY.x=Math.abs(dx)<.12?0:dx;JOY.y=Math.abs(dy)<.12?0:-dy;knob.style.transform=`translate(${dx*45}px,${dy*45}px)`;}
 function pressKey(code){window.dispatchEvent(new KeyboardEvent('keydown',{code,key:''}));window.dispatchEvent(new KeyboardEvent('keyup',{code,key:''}));}
 const TBTN={walk:[['Usar','KeyE','tap','big'],['Correr','run','toggle']],
-  fpv:[['Armar','KeyR','tap'],['Detonar','KeyF','tap'],['Subir','Space','hold'],['Bajar','ShiftLeft','hold'],['Salir','KeyX','tap','big']],
+  fpv:[['Armar','KeyR','tap'],['Detonar','KeyF','tap'],['Subir','ShiftLeft','hold'],['Bajar','KeyC','hold'],['Salir','KeyX','tap','big']],
   recon:[['Subir','Space','hold'],['Bajar','KeyQ','hold'],['Térmica','KeyT','tap'],['Zoom','KeyZ','tap'],['Marcar','KeyM','tap'],['A casa','KeyH','tap'],['Aterrizar','KeyL','tap'],['Salir','KeyX','tap']]};
 function buildTouchButtons(m){const box=$('#tbtns');box.innerHTML='';$('#joyl').textContent=m==='fpv'?'acelerador · giro':m==='recon'?'mover dron':'caminar';
   (TBTN[m]||[]).forEach(([label,code,kind,cls])=>{const b=document.createElement('button');b.className='tb'+(kind==='hold'?' hold':'')+(cls?' '+cls:'');b.textContent=label;
@@ -1490,7 +1515,7 @@ function update(dt){
       if(d.team==='blue'){if(d.type==='fpv')updateFPV(d,dt,ctrl);else{updateRecon(d,dt,ctrl);if(d.state==='stored')d.battery=Math.min(1,d.battery+dt/90);}}
       if(d.state==='flying'||d.state==='ground')setDroneVisual(d,dt);}
     if(mode==='recon'&&active&&wheel){active.zoom=clamp(active.zoom*(wheel<0?2:.5),1,8);dcam.fov=60/active.zoom;dcam.updateProjectionMatrix();}wheel=0;
-    if(!gameOver&&MODE==='ia'){updateEnemy(dt);}if(NET.on)netSync(dt);
+    if(!gameOver&&MODE==='ia'){updateEnemy(dt);checkPilot();}if(NET.on)netSync(dt);
     updateSoldiers(dt,clockT);updateBeacons();
   }
   updateFX(dt);mdx=0;mdy=0;
