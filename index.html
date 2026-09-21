@@ -1033,16 +1033,19 @@ function updateFPV(d,dt,ctrl){
   if(ctrl){const up=keys.ShiftLeft||keys.ShiftRight||keys.Space,dn=keys.ControlLeft||keys.ControlRight||keys.KeyC;
     d.throttle=clamp(d.throttle+(up?3:dn?-4:-2.5)*dt,0,1);
     if(d.state==='flying'){const k=.006*sens;
-      rotLocal(d.q,1,0,0,mdy*k-(((keys.KeyW?1:0)-(keys.KeyS?1:0)+JOY.y)*3.6*dt));
-      rotLocal(d.q,0,1,0,-mdx*k+((keys.ArrowLeft?1:0)-(keys.ArrowRight?1:0))*3.2*dt);
-      rotLocal(d.q,0,0,1,-(((keys.KeyD?1:0)-(keys.KeyA?1:0)+JOY.x)*5.5*dt));d.q.normalize();}}
+      d.sm=d.sm||{x:0,y:0};d.sm.x=lerp(d.sm.x,mdx,.6);d.sm.y=lerp(d.sm.y,mdy,.6);
+      rotLocal(d.q,1,0,0,-d.sm.y*k+((keys.ArrowUp?1:0)-(keys.ArrowDown?1:0))*2.5*dt);
+      rotLocal(d.q,0,1,0,-d.sm.x*k+((keys.ArrowLeft?1:0)-(keys.ArrowRight?1:0))*3.2*dt);
+      rotLocal(d.q,0,0,1,((keys.KeyQ?1:0)-(keys.KeyE?1:0))*4.8*dt);d.q.normalize();}}
   else d.throttle=Math.max(0,d.throttle-dt*2.5);
+  d.mv=ctrl?{f:clamp((keys.KeyW?1:0)-(keys.KeyS?1:0)+JOY.y,-1,1),s:clamp((keys.KeyD?1:0)-(keys.KeyA?1:0)+JOY.x,-1,1)}:{f:0,s:0};
   _eu.setFromQuaternion(d.q,'YXZ');d.yaw=_eu.y;d.pitch=_eu.x;d.roll=_eu.z;
   if(d.state==='ground'){if(d.throttle>.3){d.state='flying';d.vel.set(0,1,0);if(d.team==='blue')launchNoise(d);}return;}
   if(d.state!=='flying')return;
   d.flightT+=dt;d.battery-=dt*(.0014+d.throttle*.004);const cur=1.5+d.throttle*80;d.mah+=cur*dt/3.6;d.current=cur;
   const upv=_v1.set(0,1,0).applyQuaternion(d.q);const T=d.battery>0?d.throttle*TMAX:0;
   d.vel.x+=(upv.x*T-d.vel.x*.22)*dt;d.vel.z+=(upv.z*T-d.vel.z*.22)*dt;d.vel.y+=(upv.y*T-G-d.vel.y*.22)*dt;
+  {const sy=Math.sin(d.yaw),cy=Math.cos(d.yaw),A=32;d.vel.x+=(-sy*d.mv.f+cy*d.mv.s)*A*dt;d.vel.z+=(-cy*d.mv.f-sy*d.mv.s)*A*dt;}
   d.pos.addScaledVector(d.vel,dt);
   if(ctrl&&d.team==='blue'){TRAIL.push({t:clockT,p:d.pos.clone(),q:d.q.clone(),yaw:d.yaw,pitch:d.pitch,roll:d.roll});while(TRAIL.length&&clockT-TRAIL[0].t>4)TRAIL.shift();}
   const hit=droneHit(d);
@@ -1225,6 +1228,8 @@ function drawFPVOSD(d){const [fx,fy,fw,fh]=fitRect(4/3);ox.clearRect(0,0,osd.wid
   const B=myB;const hx=B.x-d.pos.x,hz=B.z-d.pos.z;const hd=Math.hypot(hx,hz);const rel=angDelta(d.yaw,Math.atan2(-hx,-hz));
   ox.save();ox.translate(fx+fw/2,Bt-fs*1.4);ox.rotate(-rel);ox.beginPath();ox.moveTo(0,-fs*.6);ox.lineTo(fs*.35,fs*.3);ox.lineTo(0,fs*.1);ox.lineTo(-fs*.35,fs*.3);ox.closePath();ox.stroke();ox.fill();ox.restore();
   T(Math.round(hd)+'M',fx+fw/2,Bt,'center');
+  {const cxm=fx+fw/2,cym=fy+fh/2;_eu.setFromQuaternion(dcam.quaternion,'YXZ');const off=_eu.x*fh*.9;ox.save();ox.translate(cxm,cym+off);ox.rotate(-_eu.z);ox.strokeStyle='rgba(244,244,238,.8)';ox.lineWidth=2;
+    ox.beginPath();ox.moveTo(-fw*.28,0);ox.lineTo(-fw*.12,0);ox.moveTo(fw*.12,0);ox.lineTo(fw*.28,0);ox.stroke();ox.restore();}
   const cxm=fx+fw/2,cym=fy+fh/2;ox.beginPath();ox.moveTo(cxm-fs*1.2,cym);ox.lineTo(cxm-fs*.4,cym);ox.moveTo(cxm+fs*.4,cym);ox.lineTo(cxm+fs*1.2,cym);ox.moveTo(cxm,cym-fs*.3);ox.lineTo(cxm,cym+fs*.3);ox.stroke();
   ox.save();ox.strokeStyle='#f4f4ee';ox.lineWidth=Math.max(1.5,fs/12);ox.beginPath();ox.moveTo(cxm-fs*1.2,cym);ox.lineTo(cxm-fs*.4,cym);ox.moveTo(cxm+fs*.4,cym);ox.lineTo(cxm+fs*1.2,cym);ox.moveTo(cxm,cym-fs*.3);ox.lineTo(cxm,cym+fs*.3);ox.stroke();ox.restore();
   if(MARK){const p=projectTo(dcam,MARK,[fx,fy,fw,fh]);const dist=Math.round(d.pos.distanceTo(MARK));
@@ -1232,7 +1237,7 @@ function drawFPVOSD(d){const [fx,fy,fw,fh]=fitRect(4/3);ox.clearRect(0,0,osd.wid
     else{const rr=angDelta(d.yaw,Math.atan2(-(MARK.x-d.pos.x),-(MARK.z-d.pos.z)));T((rr>0?'◄ ':'')+'OBJ '+dist+'M'+(rr<=0?' ►':''),fx+fw/2,fy+fh*.22,'center');}}
   if(d.battery<.2&&Math.floor(clockT*2)%2)T('BATERIA BAJA',fx+fw/2,fy+fh*.34,'center');
   if((d.noise||0)>.45)T('SEÑAL DEBIL',fx+fw/2,fy+fh*.4,'center');
-  if(d.state==='ground'||d.flightT<4)T(d.state==='ground'?'MANTEN MAYUS PARA DAR GAS':'MODO ACRO · SIN GAS SE CAE',fx+fw/2,fy+fh*.72,'center');}
+  if(d.state==='ground'||d.flightT<4)T(d.state==='ground'?'MANTEN MAYUS PARA DAR GAS':'WASD MOVER · RATON APUNTAR · Q/E GIRAR',fx+fw/2,fy+fh*.72,'center');}
 function drawReconOSD(d){const [fx,fy,fw,fh]=fitRect(16/9);ox.clearRect(0,0,osd.width,osd.height);if(!d)return;
   const fs=Math.max(13,Math.round(fh/34));ox.font=`500 ${fs}px 'Saira Condensed', sans-serif`;ox.fillStyle='#fff';ox.strokeStyle='rgba(0,0,0,.6)';ox.lineWidth=3;
   const L=fx+fs*1.2,Rr=fx+fw-fs*1.2,Tp=fy+fs*1.8,Bt=fy+fh-fs*1.2;
@@ -1258,7 +1263,7 @@ function groundUnderReticle(d){const o=dcam.position,dir=_v2.set(0,0,-1).applyQu
 const hudEl=$('#hud'),objt=$('#objt'),detb=$('#detb'),detp=$('#detp'),detEl=$('#det'),detl=$('#detl'),promptEl=$('#prompt'),invt=$('#invt'),fpsEl=$('#fps'),keyhelp=$('#keyhelp');
 let toastT=0;function toast(msg,warn){const t=$('#toast');t.textContent=msg;t.className=warn?'warn':'';t.style.opacity=1;toastT=warn?5:3.2;}
 const HELP={walk:'<b>W A S D</b> moverse · <b>Shift</b> correr<br><b>E</b> interactuar<br><b>Esc</b> pausa',
-  fpv:'<b>Mayús</b> más gas · <b>Control o C</b> menos gas<br><b>Ratón</b> cabeceo y giro (modo acro)<br><b>W / S</b> morro abajo / arriba · <b>A / D</b> alabeo<br>Sin gas se cae · puedes dar volteretas<br><b>R</b> armar · <b>Clic o F</b> detonar<br><b>X</b> volver al búnker',
+  fpv:'<b>Mayús</b> más gas · <b>Control o C</b> menos gas<br><b>Ratón</b> apuntar en 3D (arriba = morro arriba)<br><b>W A S D</b> moverse sin inclinar<br><b>Q / E</b> girar sobre su eje · puedes dar volteretas<br><b>R</b> armar · <b>Clic o F</b> detonar<br><b>X</b> volver al búnker',
   recon:'<b>W A S D</b> mover · <b>Espacio</b> subir · <b>Q</b> bajar<br><b>Ratón</b> cámara · <b>T</b> térmica<br><b>Rueda o Z</b> zoom · <b>Clic o M</b> marcar<br><b>H</b> volver a casa · <b>L</b> aterrizar · <b>X</b> salir'};
 function setHUDMode(m){document.body.classList.toggle('feed',m==='fpv'||m==='recon');buildTouchButtons(m);hudEl.classList.toggle('hidden',!(m==='walk'||m==='fpv'||m==='recon'));
   const walk=m==='walk';['#obj','#prompt','#inv','#mmwrap','#cross'].forEach(s=>$(s).style.visibility=walk?'':'hidden');keyhelp.innerHTML=HELP[m]||'';
@@ -1298,7 +1303,7 @@ function openChooser(){const list=DRONES.filter(d=>d.team==='blue'&&(d.state==='
   $('#chooser').classList.remove('hidden');mode='choose';unlock();chooserList=list;}
 let chooserList=[];function closeChooser(){$('#chooser').classList.add('hidden');if(mode==='choose')mode='walk';}
 function connect(d){active=d;d.ctrl=true;d.rth=false;mode=d.type==='fpv'?'fpv':'recon';lostT=0;setHUDMode(mode);beep(990,.06);
-  if(d.type==='recon'){dcam.fov=60/d.zoom;dcam.aspect=16/9;}else{dcam.fov=100;dcam.aspect=4/3;}dcam.updateProjectionMatrix();lock();}
+  if(d.type==='recon'){dcam.fov=60/d.zoom;dcam.aspect=16/9;}else{dcam.fov=100;dcam.aspect=4/3;d.sm={x:0,y:0};}dcam.updateProjectionMatrix();lock();}
 function disconnect(){if(!active)return;const d=active;d.ctrl=false;active=null;
   if(d.type==='fpv'&&d.state==='flying')toast('El FPV sin piloto caerá. Mejor quedarte hasta el impacto.');
   mode='walk';const w=myB.l2w(.75,-.6);PL.pos.set(w[0],myB.fy,w[1]);PL.yaw=myB.yaw;PL.pitch=-.15;setHUDMode('walk');}
@@ -1409,7 +1414,7 @@ function moveJoy(e){const r=joyEl.getBoundingClientRect();let dx=(e.clientX-r.le
   const l=Math.hypot(dx,dy);if(l>1){dx/=l;dy/=l;}JOY.x=Math.abs(dx)<.12?0:dx;JOY.y=Math.abs(dy)<.12?0:-dy;knob.style.transform=`translate(${dx*45}px,${dy*45}px)`;}
 function pressKey(code){window.dispatchEvent(new KeyboardEvent('keydown',{code,key:''}));window.dispatchEvent(new KeyboardEvent('keyup',{code,key:''}));}
 const TBTN={walk:[['Usar','KeyE','tap','big'],['Correr','run','toggle']],
-  fpv:[['Armar','KeyR','tap'],['Detonar','KeyF','tap'],['Gas +','ShiftLeft','hold'],['Gas −','ControlLeft','hold'],['Salir','KeyX','tap','big']],
+  fpv:[['Armar','KeyR','tap'],['Detonar','KeyF','tap'],['Gas +','ShiftLeft','hold'],['Gas −','ControlLeft','hold'],['↺ Q','KeyQ','hold'],['↻ E','KeyE','hold'],['Salir','KeyX','tap','big']],
   recon:[['Subir','Space','hold'],['Bajar','KeyQ','hold'],['Térmica','KeyT','tap'],['Zoom','KeyZ','tap'],['Marcar','KeyM','tap'],['A casa','KeyH','tap'],['Aterrizar','KeyL','tap'],['Salir','KeyX','tap']]};
 function buildTouchButtons(m){const box=$('#tbtns');box.innerHTML='';$('#joyl').textContent=m==='fpv'?'acelerador · giro':m==='recon'?'mover dron':'caminar';
   (TBTN[m]||[]).forEach(([label,code,kind,cls])=>{const b=document.createElement('button');b.className='tb'+(kind==='hold'?' hold':'')+(cls?' '+cls:'');b.textContent=label;
@@ -1546,7 +1551,7 @@ function disconnect2(){mode='walk';const w=myB.l2w(.75,-.6);PL.pos.set(w[0],myB.
 function updateBeacons(){}
 function render(){const feed=mode==='fpv'||mode==='recon';
   if(feed&&(active||lostT>0)){
-    const d=active;if(d){if(d.type==='fpv'){if(d.q){dcam.quaternion.copy(d.q).multiply(UPTILT);dcam.position.copy(d.pos).addScaledVector(_v1.set(0,0,-1).applyQuaternion(d.q),.12);}else{dcam.position.copy(d.pos);dcam.rotation.set(d.pitch+.42,d.yaw,d.roll);}}
+    const d=active;if(d){if(d.type==='fpv'){if(d.q){dcam.quaternion.copy(d.q).multiply(UPTILT);const sh=.0035*d.throttle+.0012;dcam.rotateX((Math.random()-.5)*sh);dcam.rotateZ((Math.random()-.5)*sh);dcam.fov=100+clamp(d.vel.length()*.3,0,20);dcam.updateProjectionMatrix();dcam.position.copy(d.pos).addScaledVector(_v1.set(0,0,-1).applyQuaternion(d.q),.12);}else{dcam.position.copy(d.pos);dcam.rotation.set(d.pitch+.42,d.yaw,d.roll);}}
       else{dcam.position.copy(d.pos);dcam.position.y-=.08;dcam.rotation.set(d.gimbal,d.yaw,0);}d.obj.visible=false;}
     updateVisibility(dcam,true);if(frameN%3===0)followShadow(dcam,80);renderer.shadowMap.autoUpdate=frameN%3===0;
     const isRec=d?d.type==='recon':active===null&&lostMsg&&false;
