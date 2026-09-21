@@ -985,7 +985,7 @@ function makeDroneObj(type,team){const g=new THREE.Group();const m=modelGroup(ty
   g.visible=false;scene.add(g);return g;}
 function newDrone(type,team){const d={type,team,obj:makeDroneObj(type,team),pos:new THREE.Vector3(),vel:new THREE.Vector3(),yaw:0,pitch:0,roll:0,throttle:0,
   battery:1,armed:false,state:'stored',mah:0,flightT:0,gimbal:-.55,zoom:1,thermal:true,voice:null,id:++droneId,rth:false,ctrl:false};DRONES.push(d);return d;}
-function setDroneVisual(d,dt){const o=d.obj;o.position.copy(d.pos);o.rotation.set(d.type==='fpv'?-d.pitch*.35:0,d.yaw+Math.PI,d.roll,'YXZ');
+function setDroneVisual(d,dt){const o=d.obj;o.position.copy(d.pos);if(d.q)o.quaternion.copy(d.q).multiply(QY180);else o.rotation.set(d.type==='fpv'?d.pitch:0,d.yaw+Math.PI,d.roll,'YXZ');
   if(d.type==='recon'){const f=_v1.copy(d.vel);o.rotation.set(0,d.yaw+Math.PI,0,'YXZ');o.rotateX(clamp(-f.dot(_v2.set(-Math.sin(d.yaw),0,-Math.cos(d.yaw)))*.03,-.3,.3));o.rotateZ(clamp(f.dot(_v2.set(Math.cos(d.yaw),0,-Math.sin(d.yaw)))*.03,-.3,.3));}
   const fly=d.state==='flying';o.userData.discs.forEach(c=>c.visible=fly);
   if(fly&&!d.voice&&AU.ctx)d.voice=droneVoice(d.team==='red'&&d.type==='fpv'?'strike':d.type);
@@ -1024,33 +1024,32 @@ const keys={};let mdx=0,mdy=0,mouseDown=false,wheel=0;
 const dirOf=(yaw,pitch,out)=>out.set(-Math.sin(yaw)*Math.cos(pitch),Math.sin(pitch),-Math.cos(yaw)*Math.cos(pitch));
 function homeOf(d){const B=d.team==='blue'?myB:enemyB;return B;}
 const TRAIL=[];let LASTBLAST=null;
+const QY180=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),Math.PI),UPTILT=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0),.45);
+const _dq=new THREE.Quaternion(),_ax=new THREE.Vector3(),_eu=new THREE.Euler(0,0,0,'YXZ');
+function rotLocal(q,x,y,z,a){if(!a)return;_dq.setFromAxisAngle(_ax.set(x,y,z),a);q.multiply(_dq);}
 function updateFPV(d,dt,ctrl){
-  const G=9.8,TMAX=2.3*G;
-  if(ctrl){d.yaw+=(-mdx*.0022*sens+((keys.ArrowLeft?1:0)-(keys.ArrowRight?1:0))*1.8*dt);
-    d.moff=clamp((d.moff||0)+mdy*.0025*sens,-.8,.8);
-    const up=keys.ShiftLeft||keys.ShiftRight||keys.Space,dn=keys.ControlLeft||keys.ControlRight||keys.KeyC;
-    d.throttle=clamp(d.throttle+(up?1.0:dn?-2:-1.1)*dt,0,1);
-    const tw=clamp(((keys.KeyW?1:0)-(keys.KeyS?1:0)+JOY.y),-1,1),tr=clamp(((keys.KeyD?1:0)-(keys.KeyA?1:0)+JOY.x),-1,1);
-    d.tiltT=tw*.75+d.moff;d.bankT=tr*.65;}
-  else{d.throttle=Math.max(0,d.throttle-dt*.6);d.tiltT=0;d.bankT=0;}
-  d.moff=(d.moff||0)*Math.exp(-1.2*dt);
-  d.tilt=lerp(d.tilt||0,d.tiltT||0,1-Math.exp(-7*dt));d.bank=lerp(d.bank||0,d.bankT||0,1-Math.exp(-7*dt));
-  d.pitch=-d.tilt;d.roll=-d.bank;
-  if(d.state==='ground'){if(d.throttle>.47){d.state='flying';d.vel.set(0,1,0);if(d.team==='blue')launchNoise(d);}return;}
+  const G=9.8,TMAX=4.2*G;
+  if(!d.q)d.q=new THREE.Quaternion().setFromEuler(_eu.set(0,d.yaw,0,'YXZ'));
+  if(ctrl){const up=keys.ShiftLeft||keys.ShiftRight||keys.Space,dn=keys.ControlLeft||keys.ControlRight||keys.KeyC;
+    d.throttle=clamp(d.throttle+(up?3:dn?-4:-2.5)*dt,0,1);
+    if(d.state==='flying'){const k=.006*sens;
+      rotLocal(d.q,1,0,0,mdy*k-(((keys.KeyW?1:0)-(keys.KeyS?1:0)+JOY.y)*3.6*dt));
+      rotLocal(d.q,0,1,0,-mdx*k+((keys.ArrowLeft?1:0)-(keys.ArrowRight?1:0))*3.2*dt);
+      rotLocal(d.q,0,0,1,-(((keys.KeyD?1:0)-(keys.KeyA?1:0)+JOY.x)*5.5*dt));d.q.normalize();}}
+  else d.throttle=Math.max(0,d.throttle-dt*2.5);
+  _eu.setFromQuaternion(d.q,'YXZ');d.yaw=_eu.y;d.pitch=_eu.x;d.roll=_eu.z;
+  if(d.state==='ground'){if(d.throttle>.3){d.state='flying';d.vel.set(0,1,0);if(d.team==='blue')launchNoise(d);}return;}
   if(d.state!=='flying')return;
-  d.flightT+=dt;d.battery-=dt*(.0014+d.throttle*.004);const cur=1.5+d.throttle*55;d.mah+=cur*dt/3.6;d.current=cur;
-  const f=_v1.set(-Math.sin(d.yaw),0,-Math.cos(d.yaw)),r=_v2.set(Math.cos(d.yaw),0,-Math.sin(d.yaw));
-  const upx=f.x*Math.sin(d.tilt)+r.x*Math.sin(d.bank),upz=f.z*Math.sin(d.tilt)+r.z*Math.sin(d.bank),upy=Math.cos(d.tilt)*Math.cos(d.bank);
-  const T=d.battery>0?d.throttle*TMAX:0;
-  d.vel.x+=(upx*T-d.vel.x*.28)*dt;d.vel.z+=(upz*T-d.vel.z*.28)*dt;d.vel.y+=(upy*T-G-d.vel.y*.35)*dt;
+  d.flightT+=dt;d.battery-=dt*(.0014+d.throttle*.004);const cur=1.5+d.throttle*80;d.mah+=cur*dt/3.6;d.current=cur;
+  const upv=_v1.set(0,1,0).applyQuaternion(d.q);const T=d.battery>0?d.throttle*TMAX:0;
+  d.vel.x+=(upv.x*T-d.vel.x*.22)*dt;d.vel.z+=(upv.z*T-d.vel.z*.22)*dt;d.vel.y+=(upv.y*T-G-d.vel.y*.22)*dt;
   d.pos.addScaledVector(d.vel,dt);
-  if(ctrl&&d.team==='blue'){TRAIL.push({t:clockT,p:d.pos.clone(),yaw:d.yaw,pitch:d.pitch,roll:d.roll});while(TRAIL.length&&clockT-TRAIL[0].t>4)TRAIL.shift();}
+  if(ctrl&&d.team==='blue'){TRAIL.push({t:clockT,p:d.pos.clone(),q:d.q.clone(),yaw:d.yaw,pitch:d.pitch,roll:d.roll});while(TRAIL.length&&clockT-TRAIL[0].t>4)TRAIL.shift();}
   const hit=droneHit(d);
   if(hit){const sp=d.vel.length();
-    if(hit.what==='ground'&&(sp<6||!d.armed&&sp<8)){const gy=GY(d.pos.x,d.pos.z);d.pos.y=gy+.1;d.vel.y=Math.max(0,d.vel.y);d.vel.x*=.85;d.vel.z*=.85;if(d.throttle<.3&&sp<1.5){d.state='ground';d.vel.set(0,0,0);}}
+    if(hit.what==='ground'&&(sp<6||!d.armed&&sp<8)){const gy=GY(d.pos.x,d.pos.z);d.pos.y=gy+.1;d.vel.y=Math.max(0,d.vel.y);d.vel.x*=.85;d.vel.z*=.85;if(d.throttle<.2&&sp<1.5){d.state='ground';d.vel.set(0,0,0);d.q.setFromEuler(_eu.set(0,d.yaw,0,'YXZ'));}}
     else{if(hit.what==='drone'){explosionFX(hit.o.pos,false);killDrone(hit.o);if(hit.o===ENEMY.recon){ENEMY.recon=null;ENEMY.respawn=90;toast('Dron de reconocimiento enemigo derribado');}
         if(hit.o===ENEMY.strike){ENEMY.strike=null;ENEMY.det=.55;toast('¡FPV enemigo interceptado!');}}
-      if(d.team==='red'&&d===ENEMY.strike){ENEMY.strike=null;}
       detonate(d,{ground:'Contra el suelo',tree:'Contra un árbol',house:'Contra un edificio',bunker:'Contra un búnker',soldier:'Impacto directo',drone:'Choque en el aire'}[hit.what]);return;}}
   if(d.team==='blue'){const B=myB;const dist=Math.hypot(d.pos.x-B.x,d.pos.z-B.z);const agl=d.pos.y-GY(d.pos.x,d.pos.z);
     d.noise=clamp(smooth(1700,3200,dist)*.8+(agl<2&&dist>1200?.15:0)+(Math.random()<.004?.12:0),0,1);
@@ -1233,7 +1232,7 @@ function drawFPVOSD(d){const [fx,fy,fw,fh]=fitRect(4/3);ox.clearRect(0,0,osd.wid
     else{const rr=angDelta(d.yaw,Math.atan2(-(MARK.x-d.pos.x),-(MARK.z-d.pos.z)));T((rr>0?'◄ ':'')+'OBJ '+dist+'M'+(rr<=0?' ►':''),fx+fw/2,fy+fh*.22,'center');}}
   if(d.battery<.2&&Math.floor(clockT*2)%2)T('BATERIA BAJA',fx+fw/2,fy+fh*.34,'center');
   if((d.noise||0)>.45)T('SEÑAL DEBIL',fx+fw/2,fy+fh*.4,'center');
-  if(d.state==='ground'||d.flightT<4)T(d.state==='ground'?'MANTEN MAYUS PARA DAR GAS':'SIN GAS SE CAE · SUELTA MAYUS PARA NO SUBIR',fx+fw/2,fy+fh*.72,'center');}
+  if(d.state==='ground'||d.flightT<4)T(d.state==='ground'?'MANTEN MAYUS PARA DAR GAS':'MODO ACRO · SIN GAS SE CAE',fx+fw/2,fy+fh*.72,'center');}
 function drawReconOSD(d){const [fx,fy,fw,fh]=fitRect(16/9);ox.clearRect(0,0,osd.width,osd.height);if(!d)return;
   const fs=Math.max(13,Math.round(fh/34));ox.font=`500 ${fs}px 'Saira Condensed', sans-serif`;ox.fillStyle='#fff';ox.strokeStyle='rgba(0,0,0,.6)';ox.lineWidth=3;
   const L=fx+fs*1.2,Rr=fx+fw-fs*1.2,Tp=fy+fs*1.8,Bt=fy+fh-fs*1.2;
@@ -1259,7 +1258,7 @@ function groundUnderReticle(d){const o=dcam.position,dir=_v2.set(0,0,-1).applyQu
 const hudEl=$('#hud'),objt=$('#objt'),detb=$('#detb'),detp=$('#detp'),detEl=$('#det'),detl=$('#detl'),promptEl=$('#prompt'),invt=$('#invt'),fpsEl=$('#fps'),keyhelp=$('#keyhelp');
 let toastT=0;function toast(msg,warn){const t=$('#toast');t.textContent=msg;t.className=warn?'warn':'';t.style.opacity=1;toastT=warn?5:3.2;}
 const HELP={walk:'<b>W A S D</b> moverse · <b>Shift</b> correr<br><b>E</b> interactuar<br><b>Esc</b> pausa',
-  fpv:'<b>Mayús</b> más gas · <b>Control o C</b> menos gas<br><b>W / S</b> inclinar adelante / atrás<br><b>A / D</b> inclinar a los lados · <b>Ratón</b> girar<br>Sin gas se cae: no hay modo hover<br><b>R</b> armar · <b>Clic o F</b> detonar<br><b>X</b> volver al búnker',
+  fpv:'<b>Mayús</b> más gas · <b>Control o C</b> menos gas<br><b>Ratón</b> cabeceo y giro (modo acro)<br><b>W / S</b> morro abajo / arriba · <b>A / D</b> alabeo<br>Sin gas se cae · puedes dar volteretas<br><b>R</b> armar · <b>Clic o F</b> detonar<br><b>X</b> volver al búnker',
   recon:'<b>W A S D</b> mover · <b>Espacio</b> subir · <b>Q</b> bajar<br><b>Ratón</b> cámara · <b>T</b> térmica<br><b>Rueda o Z</b> zoom · <b>Clic o M</b> marcar<br><b>H</b> volver a casa · <b>L</b> aterrizar · <b>X</b> salir'};
 function setHUDMode(m){document.body.classList.toggle('feed',m==='fpv'||m==='recon');buildTouchButtons(m);hudEl.classList.toggle('hidden',!(m==='walk'||m==='fpv'||m==='recon'));
   const walk=m==='walk';['#obj','#prompt','#inv','#mmwrap','#cross'].forEach(s=>$(s).style.visibility=walk?'':'hidden');keyhelp.innerHTML=HELP[m]||'';
@@ -1519,7 +1518,7 @@ function startReplay(B,done){mode='replay';setHUDMode('replay');unlock();$('#tou
   toast('REPETICIÓN · vista desde otro dron');toastT=99;}
 function updateReplay(dt){if(!RP)return;RP.t+=dt;const r=RP;
   if(r.t<r.dA){const tt=r.tr[0].t+r.t;let i=0;while(i<r.tr.length-2&&r.tr[i+1].t<tt)i++;const a=r.tr[i],b=r.tr[i+1];const k=clamp((tt-a.t)/Math.max(1e-3,b.t-a.t),0,1);
-    const pos=_v1.copy(a.p).lerp(b.p,k);ghost2.visible=true;ghost2.position.copy(pos);ghost2.rotation.set(-a.pitch*.35,a.yaw+Math.PI,a.roll,'YXZ');
+    const pos=_v1.copy(a.p).lerp(b.p,k);ghost2.visible=true;ghost2.position.copy(pos);if(a.q)ghost2.quaternion.copy(a.q).multiply(QY180);
     const back=_v2.set(Math.sin(a.yaw),0,Math.cos(a.yaw)).multiplyScalar(5);camera.position.copy(pos).add(back);camera.position.y+=1.8;camera.lookAt(pos);}
   else{ghost2.visible=false;if(!r.boomed){r.boomed=true;explosionFX(r.p,true);boom(r.p,true);}const a=(r.t-r.dA)*.45;
     camera.position.set(r.p.x+Math.cos(a)*16,Math.max(GY(r.p.x,r.p.z)+6,r.p.y+7),r.p.z+Math.sin(a)*16);camera.lookAt(r.p);
@@ -1547,7 +1546,7 @@ function disconnect2(){mode='walk';const w=myB.l2w(.75,-.6);PL.pos.set(w[0],myB.
 function updateBeacons(){}
 function render(){const feed=mode==='fpv'||mode==='recon';
   if(feed&&(active||lostT>0)){
-    const d=active;if(d){if(d.type==='fpv'){dcam.position.copy(d.pos).addScaledVector(dirOf(d.yaw,d.pitch,_v1),.12);dcam.rotation.set(d.pitch+.42,d.yaw,d.roll);}
+    const d=active;if(d){if(d.type==='fpv'){if(d.q){dcam.quaternion.copy(d.q).multiply(UPTILT);dcam.position.copy(d.pos).addScaledVector(_v1.set(0,0,-1).applyQuaternion(d.q),.12);}else{dcam.position.copy(d.pos);dcam.rotation.set(d.pitch+.42,d.yaw,d.roll);}}
       else{dcam.position.copy(d.pos);dcam.position.y-=.08;dcam.rotation.set(d.gimbal,d.yaw,0);}d.obj.visible=false;}
     updateVisibility(dcam,true);if(frameN%3===0)followShadow(dcam,80);renderer.shadowMap.autoUpdate=frameN%3===0;
     const isRec=d?d.type==='recon':active===null&&lostMsg&&false;
