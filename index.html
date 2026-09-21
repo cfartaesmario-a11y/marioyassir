@@ -158,10 +158,10 @@ body.touch #fps{top:auto;bottom:calc(172px + env(safe-area-inset-bottom,0px));ri
 <div id="menu" class="hidden"><div class="card">
   <h1>Búnker oculto</h1>
   <div class="row"><label>Modo</label>
-    <div class="seg" id="mseg"><button data-m="ia" class="on">Contra la IA</button><button data-m="online">Online 1 contra 1</button></div></div>
+    <div class="seg" id="mseg"><button data-m="ia" class="on">Contra la IA</button><button data-m="online">Online (2 o 3 jugadores)</button></div></div>
   <div id="online" class="hidden">
     <div class="row"><button class="btn ghost" id="bCreate">Crear sala</button><input id="codeIn" maxlength="4" placeholder="Código" autocomplete="off" spellcheck="false"><button class="btn ghost" id="bJoin">Unirse</button></div>
-    <p id="netst" class="dim">Crea una sala y pásale el código o el enlace al otro jugador. El que entra juega con el bando contrario.</p>
+    <p id="netst" class="dim">Crea una sala y pasa el código o el enlace. Caben 3 jugadores: los que entran van al bando con menos gente (2 contra 1).</p>
     <div class="row hidden" id="linkrow"><button class="btn ghost" id="bCopy">Copiar enlace de invitación</button></div>
   </div>
   <div class="row"><label>Tu bando</label>
@@ -985,7 +985,7 @@ function makeDroneObj(type,team){const g=new THREE.Group();const m=modelGroup(ty
   g.visible=false;scene.add(g);return g;}
 function newDrone(type,team){const d={type,team,obj:makeDroneObj(type,team),pos:new THREE.Vector3(),vel:new THREE.Vector3(),yaw:0,pitch:0,roll:0,throttle:0,
   battery:1,armed:false,state:'stored',mah:0,flightT:0,gimbal:-.55,zoom:1,thermal:true,voice:null,id:++droneId,rth:false,ctrl:false};DRONES.push(d);return d;}
-function setDroneVisual(d,dt){const o=d.obj;o.position.copy(d.pos);if(d.q)o.quaternion.copy(d.q).multiply(QY180);else o.rotation.set(d.type==='fpv'?d.pitch:0,d.yaw+Math.PI,d.roll,'YXZ');
+function setDroneVisual(d,dt){const o=d.obj;o.position.copy(d.pos);o.rotation.set(d.type==='fpv'?d.pitch:0,d.yaw+Math.PI,d.roll,'YXZ');
   if(d.type==='recon'){const f=_v1.copy(d.vel);o.rotation.set(0,d.yaw+Math.PI,0,'YXZ');o.rotateX(clamp(-f.dot(_v2.set(-Math.sin(d.yaw),0,-Math.cos(d.yaw)))*.03,-.3,.3));o.rotateZ(clamp(f.dot(_v2.set(Math.cos(d.yaw),0,-Math.sin(d.yaw)))*.03,-.3,.3));}
   const fly=d.state==='flying';o.userData.discs.forEach(c=>c.visible=fly);
   if(fly&&!d.voice&&AU.ctx)d.voice=droneVoice(d.team==='red'&&d.type==='fpv'?'strike':d.type);
@@ -1005,7 +1005,7 @@ function droneHit(d){const p=d.pos,gy=GY(p.x,p.z);let hit=null;
   return hit;}
 function applyBlast(p,team){
   for(const S_ of SOLDIERS){const dd=Math.hypot(S_.pos.x-p.x,S_.pos.z-p.z),dy=Math.abs(S_.pos.y+1-p.y);
-    if(S_.alive&&dd<7.5&&dy<6)killSoldier(S_);else if(S_.alive&&dd<45){S_.panic=MR(4,7);S_.panicDir=Math.atan2(S_.pos.x-p.x,S_.pos.z-p.z)+MR(-.5,.5);}}
+    if(S_.team===team&&S_.remote)continue;if(S_.alive&&dd<7.5&&dy<6)killSoldier(S_);else if(S_.alive&&dd<45){S_.panic=MR(4,7);S_.panicDir=Math.atan2(S_.pos.x-p.x,S_.pos.z-p.z)+MR(-.5,.5);}}
   for(const B of BUNKERS){if(!B.alive||B.team===team)continue;const dd=Math.hypot(B.x-p.x,B.z-p.z);if(dd<7&&p.y<B.fy+6)destroyBunker(B);}
   for(const t of TREES)if(!t.hidden&&Math.abs(t.x-p.x)<5&&Math.abs(t.z-p.z)<5&&Math.hypot(t.x-p.x,t.z-p.z)<4.5&&p.y<t.y+t.h+2){hideTreesNear(t.x,t.z,.5);if(t.k!=='bush'&&t.k!=='reed'&&Math.random()<.5)makeFire(t.x,t.y+.3,t.z,25,1.4);}
   for(const h of HOUSE_COLL)if(Math.hypot(h.x-p.x,h.z-p.z)<h.r+3&&p.y<h.top+2){makeFire(p.x,GY(p.x,p.z),p.z,50,2.5);debris(p,12,[0xe9e4d6,0x8f8b83,0x5b4632,0x7a8a86],10,1.1);break;}
@@ -1027,37 +1027,34 @@ const TRAIL=[];let LASTBLAST=null;
 const QY180=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),Math.PI),UPTILT=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0),.45);
 const _dq=new THREE.Quaternion(),_ax=new THREE.Vector3(),_eu=new THREE.Euler(0,0,0,'YXZ');
 function rotLocal(q,x,y,z,a){if(!a)return;_dq.setFromAxisAngle(_ax.set(x,y,z),a);q.multiply(_dq);}
+function fpvPush(d,t){const dx=d.pos.x-t.x,dz=d.pos.z-t.z,dl=Math.hypot(dx,dz)||1,r=dl<.3?.3:t.w*.18+.25;d.pos.x=t.x+dx/dl*r;d.pos.z=t.z+dz/dl*r;const vn=(d.vel.x*dx+d.vel.z*dz)/dl;if(vn<0){d.vel.x-=vn*dx/dl*1.3;d.vel.z-=vn*dz/dl*1.3;}}
 function updateFPV(d,dt,ctrl){
-  const G=9.8,TMAX=4.2*G;
-  if(!d.q)d.q=new THREE.Quaternion().setFromEuler(_eu.set(0,d.yaw,0,'YXZ'));
-  if(ctrl){const up=keys.ShiftLeft||keys.ShiftRight||keys.Space,dn=keys.ControlLeft||keys.ControlRight||keys.KeyC;
-    d.throttle=clamp(d.throttle+(up?3:dn?-4:-2.5)*dt,0,1);
-    if(d.state==='flying'){const k=.006*sens;
-      d.sm=d.sm||{x:0,y:0};d.sm.x=lerp(d.sm.x,mdx,.6);d.sm.y=lerp(d.sm.y,mdy,.6);
-      rotLocal(d.q,1,0,0,-d.sm.y*k+((keys.ArrowUp?1:0)-(keys.ArrowDown?1:0))*2.5*dt);
-      rotLocal(d.q,0,1,0,-d.sm.x*k+((keys.ArrowLeft?1:0)-(keys.ArrowRight?1:0))*3.2*dt);
-      rotLocal(d.q,0,0,1,((keys.KeyQ?1:0)-(keys.KeyE?1:0))*4.8*dt);d.q.normalize();}}
-  else d.throttle=Math.max(0,d.throttle-dt*2.5);
-  d.mv=ctrl?{f:clamp((keys.KeyW?1:0)-(keys.KeyS?1:0)+JOY.y,-1,1),s:clamp((keys.KeyD?1:0)-(keys.KeyA?1:0)+JOY.x,-1,1)}:{f:0,s:0};
-  _eu.setFromQuaternion(d.q,'YXZ');d.yaw=_eu.y;d.pitch=_eu.x;d.roll=_eu.z;
-  if(d.state==='ground'){if(d.throttle>.3){d.state='flying';d.vel.set(0,1,0);if(d.team==='blue')launchNoise(d);}return;}
+  let f=0,s=0,v=0,turbo=false;
+  if(ctrl){d.yaw-=mdx*.0026*sens;d.pitch=clamp(d.pitch-mdy*.0026*sens,-1.5,1.1);
+    f=clamp((keys.KeyW?1:0)-(keys.KeyS?1:0)+JOY.y,-1,1);s=clamp((keys.KeyD?1:0)-(keys.KeyA?1:0)+JOY.x,-1,1);
+    v=(keys.Space?1:0)-(keys.KeyC||keys.ControlLeft?1:0);turbo=!!(keys.ShiftLeft||keys.ShiftRight);}
+  d.throttle=clamp(.35+Math.abs(f)*.3+v*.25+(turbo?.25:0),0,1);
+  d.roll=lerp(d.roll,-s*.35,1-Math.exp(-8*dt));
+  if(d.state==='ground'){if(ctrl&&(v>0||f!==0||s!==0)){d.state='flying';d.vel.set(0,2,0);d.pos.y+=.2;if(d.team==='blue')launchNoise(d);}return;}
   if(d.state!=='flying')return;
-  d.flightT+=dt;d.battery-=dt*(.0014+d.throttle*.004);const cur=1.5+d.throttle*80;d.mah+=cur*dt/3.6;d.current=cur;
-  const upv=_v1.set(0,1,0).applyQuaternion(d.q);const T=d.battery>0?d.throttle*TMAX:0;
-  d.vel.x+=(upv.x*T-d.vel.x*.22)*dt;d.vel.z+=(upv.z*T-d.vel.z*.22)*dt;d.vel.y+=(upv.y*T-G-d.vel.y*.22)*dt;
-  {const sy=Math.sin(d.yaw),cy=Math.cos(d.yaw),A=32;d.vel.x+=(-sy*d.mv.f+cy*d.mv.s)*A*dt;d.vel.z+=(-cy*d.mv.f-sy*d.mv.s)*A*dt;}
-  d.pos.addScaledVector(d.vel,dt);
-  if(ctrl&&d.team==='blue'){TRAIL.push({t:clockT,p:d.pos.clone(),q:d.q.clone(),yaw:d.yaw,pitch:d.pitch,roll:d.roll});while(TRAIL.length&&clockT-TRAIL[0].t>4)TRAIL.shift();}
+  d.flightT+=dt;d.battery-=dt*(.0015+d.throttle*.003);const cur=2+d.throttle*50;d.mah+=cur*dt/3.6;d.current=cur;
+  const sp=turbo?32:10,cp=Math.cos(d.pitch);
+  const tx=(-Math.sin(d.yaw)*cp*f+Math.cos(d.yaw)*s*.85)*sp,tz=(-Math.cos(d.yaw)*cp*f-Math.sin(d.yaw)*s*.85)*sp,ty=Math.sin(d.pitch)*f*sp+v*6+(ctrl?0:-2.5);
+  d.vel.lerp(_v2.set(tx,ty,tz),1-Math.exp(-(turbo?3.5:7)*dt));d.pos.addScaledVector(d.vel,dt);
+  if(ctrl&&d.team==='blue'){TRAIL.push({t:clockT,p:d.pos.clone(),yaw:d.yaw,pitch:d.pitch,roll:d.roll});while(TRAIL.length&&clockT-TRAIL[0].t>4)TRAIL.shift();}
   const hit=droneHit(d);
-  if(hit){const sp=d.vel.length();
-    if(hit.what==='ground'&&(sp<6||!d.armed&&sp<8)){const gy=GY(d.pos.x,d.pos.z);d.pos.y=gy+.1;d.vel.y=Math.max(0,d.vel.y);d.vel.x*=.85;d.vel.z*=.85;if(d.throttle<.2&&sp<1.5){d.state='ground';d.vel.set(0,0,0);d.q.setFromEuler(_eu.set(0,d.yaw,0,'YXZ'));}}
+  if(hit){const vs=d.vel.length();
+    if(hit.what==='ground'&&!(d.armed&&vs>8)){const gy=GY(d.pos.x,d.pos.z);d.pos.y=gy+.12;d.vel.y=Math.max(0,d.vel.y);if(!ctrl&&vs<1){d.state='ground';d.vel.set(0,0,0);}}
+    else if(hit.what==='tree'&&!(d.armed&&vs>8))fpvPush(d,hit.t);
+    else if((hit.what==='house'||hit.what==='bunker')&&!(d.armed&&vs>8)){d.pos.addScaledVector(d.vel,-dt*1.5);d.vel.multiplyScalar(-.3);}
     else{if(hit.what==='drone'){explosionFX(hit.o.pos,false);killDrone(hit.o);if(hit.o===ENEMY.recon){ENEMY.recon=null;ENEMY.respawn=90;toast('Dron de reconocimiento enemigo derribado');}
         if(hit.o===ENEMY.strike){ENEMY.strike=null;ENEMY.det=.55;toast('¡FPV enemigo interceptado!');}}
       detonate(d,{ground:'Contra el suelo',tree:'Contra un árbol',house:'Contra un edificio',bunker:'Contra un búnker',soldier:'Impacto directo',drone:'Choque en el aire'}[hit.what]);return;}}
-  if(d.team==='blue'){const B=myB;const dist=Math.hypot(d.pos.x-B.x,d.pos.z-B.z);const agl=d.pos.y-GY(d.pos.x,d.pos.z);
-    d.noise=clamp(smooth(1700,3200,dist)*.8+(agl<2&&dist>1200?.15:0)+(Math.random()<.004?.12:0),0,1);
-    if(dist>3300){detonate(d,'Fuera de alcance');return;}}
+  if(d.team==='blue'){const B=myB;const dist=Math.hypot(d.pos.x-B.x,d.pos.z-B.z);
+    d.noise=clamp(smooth(1700,3200,dist)*.8+(Math.random()<.003?.1:0),0,1);if(dist>3300){detonate(d,'Fuera de alcance');return;}}
   if(d.battery<=-.02){detonate(d,'Batería agotada');}}
+function obstacleAhead(d){const dir=dirOf(d.yaw,d.pitch,_v1).clone();const q=new THREE.Vector3();for(let t=1;t<=30;t+=.75){q.copy(d.pos).addScaledVector(dir,t);if(q.y<GY(q.x,q.z)+.1)return t;
+  let h=false;treesNear(q.x,q.z,5,tr=>{if(h)return;const dd=Math.hypot(tr.x-q.x,tr.z-q.z);if(dd<.3&&q.y<tr.y+tr.h*.85)h=true;else if(tr.k!=='dead'&&dd<tr.w*.16&&q.y>tr.y+tr.h*.45&&q.y<tr.y+tr.h*.9)h=true;});if(h)return t;}return null;}
 function updateRecon(d,dt,ctrl){
   const B=homeOf(d);
   if(ctrl&&!d.rth){d.yaw-=mdx*.0022*sens;d.gimbal=clamp(d.gimbal-mdy*.0022*sens,-1.55,.2);}
@@ -1133,7 +1130,7 @@ function interaction(){if(!myB)return null;const l=myB.w2l(PL.pos.x,PL.pos.z);co
     if(near(1.4,.6,1)){if(!c&&MYRECON.state==='stored')return{t:'Coger el dron de vigilancia',f:takeRecon};if(c&&c.type==='recon')return{t:'Dejar el dron en su caja (se recarga)',f:storeRecon};}
     if(near(.75,-.95,.95)&&!c)return{t:'Sentarse al PC y pilotar',f:openChooser};
     if(near(3.4,2.2,1.5))return{t:myB.genOn?'Apagar el generador (menos calor, sin luz)':'Encender el generador',f:()=>{setGenerator(myB,!myB.genOn);toast(myB.genOn?'Generador encendido':'Generador apagado: menos firma térmica');}};}
-  if(!c)for(const d of DRONES)if(d.team==='blue'&&d.state==='ground'&&Math.hypot(d.pos.x-PL.pos.x,d.pos.z-PL.pos.z)<1.5)return{t:d.type==='fpv'?'Recoger el FPV':'Recoger el dron de vigilancia',f:()=>pickupDrone(d)};
+  if(!c)for(const d of DRONES)if(d.team==='blue'&&!d.remote&&d.state==='ground'&&Math.hypot(d.pos.x-PL.pos.x,d.pos.z-PL.pos.z)<1.5)return{t:d.type==='fpv'?'Recoger el FPV':'Recoger el dron de vigilancia',f:()=>pickupDrone(d)};
   if(c&&!PL.inside){if(Math.hypot(PL.pos.x-myB.x,PL.pos.z-myB.z)<70)return{t:'Dejar el dron en el suelo para despegar',f:placeDrone};return{t:'Demasiado lejos de la antena del búnker',f:null};}
   return null;}
 function updatePlayer(dt){
@@ -1235,9 +1232,11 @@ function drawFPVOSD(d){const [fx,fy,fw,fh]=fitRect(4/3);ox.clearRect(0,0,osd.wid
   if(MARK){const p=projectTo(dcam,MARK,[fx,fy,fw,fh]);const dist=Math.round(d.pos.distanceTo(MARK));
     if(p&&p[0]>fx&&p[0]<fx+fw&&p[1]>fy&&p[1]<fy+fh){ox.save();ox.translate(p[0],p[1]);ox.rotate(Math.PI/4);ox.strokeRect(-fs*.4,-fs*.4,fs*.8,fs*.8);ox.restore();T(dist+'M',p[0],p[1]+fs*1.2,'center');}
     else{const rr=angDelta(d.yaw,Math.atan2(-(MARK.x-d.pos.x),-(MARK.z-d.pos.z)));T((rr>0?'◄ ':'')+'OBJ '+dist+'M'+(rr<=0?' ►':''),fx+fw/2,fy+fh*.22,'center');}}
+  {const ob=obstacleAhead(d);if(ob&&ob<14){ox.save();ox.fillStyle=ob<5?'#ff5040':'#ffd23a';T('OBSTACULO '+Math.round(ob)+'M',fx+fw/2,fy+fh*.62,'center');ox.restore();}
+   const fp=projectTo(dcam,_v2.copy(d.pos).addScaledVector(d.vel,1.2),[fx,fy,fw,fh]);if(fp&&d.vel.length()>2){ox.beginPath();ox.arc(fp[0],fp[1],fs*.35,0,7);ox.stroke();ox.save();ox.strokeStyle='#f4f4ee';ox.lineWidth=1.5;ox.beginPath();ox.arc(fp[0],fp[1],fs*.35,0,7);ox.stroke();ox.restore();}}
   if(d.battery<.2&&Math.floor(clockT*2)%2)T('BATERIA BAJA',fx+fw/2,fy+fh*.34,'center');
   if((d.noise||0)>.45)T('SEÑAL DEBIL',fx+fw/2,fy+fh*.4,'center');
-  if(d.state==='ground'||d.flightT<4)T(d.state==='ground'?'MANTEN MAYUS PARA DAR GAS':'WASD MOVER · RATON APUNTAR · Q/E GIRAR',fx+fw/2,fy+fh*.72,'center');}
+  if(d.state==='ground'||d.flightT<4)T(d.state==='ground'?'ESPACIO PARA DESPEGAR':'W: VUELA HACIA DONDE MIRAS',fx+fw/2,fy+fh*.72,'center');}
 function drawReconOSD(d){const [fx,fy,fw,fh]=fitRect(16/9);ox.clearRect(0,0,osd.width,osd.height);if(!d)return;
   const fs=Math.max(13,Math.round(fh/34));ox.font=`500 ${fs}px 'Saira Condensed', sans-serif`;ox.fillStyle='#fff';ox.strokeStyle='rgba(0,0,0,.6)';ox.lineWidth=3;
   const L=fx+fs*1.2,Rr=fx+fw-fs*1.2,Tp=fy+fs*1.8,Bt=fy+fh-fs*1.2;
@@ -1263,15 +1262,15 @@ function groundUnderReticle(d){const o=dcam.position,dir=_v2.set(0,0,-1).applyQu
 const hudEl=$('#hud'),objt=$('#objt'),detb=$('#detb'),detp=$('#detp'),detEl=$('#det'),detl=$('#detl'),promptEl=$('#prompt'),invt=$('#invt'),fpsEl=$('#fps'),keyhelp=$('#keyhelp');
 let toastT=0;function toast(msg,warn){const t=$('#toast');t.textContent=msg;t.className=warn?'warn':'';t.style.opacity=1;toastT=warn?5:3.2;}
 const HELP={walk:'<b>W A S D</b> moverse · <b>Shift</b> correr<br><b>E</b> interactuar<br><b>Esc</b> pausa',
-  fpv:'<b>Mayús</b> más gas · <b>Control o C</b> menos gas<br><b>Ratón</b> apuntar en 3D (arriba = morro arriba)<br><b>W A S D</b> moverse sin inclinar<br><b>Q / E</b> girar sobre su eje · puedes dar volteretas<br><b>R</b> armar · <b>Clic o F</b> detonar<br><b>X</b> volver al búnker',
+  fpv:'<b>Ratón</b> mirar · <b>W</b> vuela hacia donde miras<br><b>A / D</b> lateral · <b>S</b> atrás<br><b>Espacio</b> subir · <b>C</b> bajar · <b>Mayús</b> turbo<br><b>R</b> armar · <b>Clic o F</b> detonar · <b>X</b> volver',
   recon:'<b>W A S D</b> mover · <b>Espacio</b> subir · <b>Q</b> bajar<br><b>Ratón</b> cámara · <b>T</b> térmica<br><b>Rueda o Z</b> zoom · <b>Clic o M</b> marcar<br><b>H</b> volver a casa · <b>L</b> aterrizar · <b>X</b> salir'};
 function setHUDMode(m){document.body.classList.toggle('feed',m==='fpv'||m==='recon');buildTouchButtons(m);hudEl.classList.toggle('hidden',!(m==='walk'||m==='fpv'||m==='recon'));
   const walk=m==='walk';['#obj','#prompt','#inv','#mmwrap','#cross'].forEach(s=>$(s).style.visibility=walk?'':'hidden');keyhelp.innerHTML=HELP[m]||'';
   if(!(m==='fpv'||m==='recon'))ox.clearRect(0,0,osd.width,osd.height);}
-function objective(){if(!myB)return'';const out=DRONES.some(d=>d.team==='blue'&&(d.state==='ground'||d.state==='flying'));
+function objective(){if(!myB)return'';const out=DRONES.some(d=>d.team==='blue'&&!d.remote&&(d.state==='ground'||d.state==='flying'));
   if(PL.carry)return PL.inside?'Sal por la puerta y pulsa E para dejar el dron en el suelo.':'Pulsa E para dejarlo en el suelo. Luego vuelve al PC.';
   if(out&&mode==='walk')return'Vuelve al PC (mesa del fondo) y pulsa E para pilotar.';
-  if(MODE==='online'&&!(NET.rival&&NET.rival.placed))return'Esperando a que el rival esconda su búnker. Mientras, prepara un dron.';
+  if(MODE==='online'&&!(rivals().length&&rivals().every(([k,v])=>v.placed)))return'Esperando a que los rivales escondan su búnker. Mientras, prepara un dron.';
   if(!MARK)return'Busca el búnker enemigo en el bosque '+(SIDE==='N'?'sur':'norte')+' con la térmica del dron de vigilancia. Marca lo que veas con clic.';
   return'Tienes un objetivo marcado. Lanza un FPV kamikaze, ármalo con R y guíate por el rombo del OSD.';}
 const mm=$('#mm'),mx=mm.getContext('2d');const mmBase=document.createElement('canvas');let mmS=0;
@@ -1285,7 +1284,7 @@ function drawMM(){if(!mmS)return;mx.drawImage(mmBase,0,0);const q=(x,z)=>[(x+HAL
 let hudT=0,fpsAcc=0,fpsN=0;
 function updateHUD(dt){hudT-=dt;toastT-=dt;if(toastT<=0)$('#toast').style.opacity=0;if(hudT>0)return;hudT=.12;
   objt.textContent=objective();let er=1e9,efpv=false;for(const o of DRONES)if(o.team==='red'&&o.state==='flying'){const dd=Math.hypot(o.pos.x-PL.pos.x,o.pos.z-PL.pos.z);if(dd<er){er=dd;efpv=o.type==='fpv';}}
-  if(MODE==='online'){detb.parentNode.style.display='none';detp.textContent=NET.rival?'rival conectado':'sin rival';detl.textContent=er<300?(efpv?'¡FPV enemigo cerca!':'Dron enemigo cerca'):'Sin drones enemigos cerca';detEl.classList.toggle('alert',er<300);}
+  if(MODE==='online'){detb.parentNode.style.display='none';detp.textContent=rivals().length+' rival'+(rivals().length===1?'':'es')+(allies().length?' · '+allies().length+' aliado':'');detl.textContent=er<300?(efpv?'¡FPV enemigo cerca!':'Dron enemigo cerca'):'Sin drones enemigos cerca';detEl.classList.toggle('alert',er<300);}
   else{const det=ENEMY.det;detb.style.width=(det*100)+'%';detb.style.background=det>.7?'var(--red)':det>.35?'#e0a040':'var(--ok)';detp.textContent=Math.round(det*100)+' %';
   detl.textContent=ENEMY.strike?'¡FPV enemigo en camino!':er<250?'Dron enemigo cerca':'Riesgo de detección';detEl.classList.toggle('alert',!!ENEMY.strike||er<250);}
   invt.textContent=PL.carry?(PL.carry.type==='fpv'?'FPV kamikaze':'dron de vigilancia'):'nada';
@@ -1294,7 +1293,7 @@ function updateHUD(dt){hudT-=dt;toastT-=dt;if(toastT<=0)$('#toast').style.opacit
 
 /* ================= selector de dron ================= */
 let MYRECON=null;
-function openChooser(){const list=DRONES.filter(d=>d.team==='blue'&&(d.state==='ground'||d.state==='flying'));
+function openChooser(){const list=DRONES.filter(d=>d.team==='blue'&&!d.remote&&(d.state==='ground'||d.state==='flying'));
   if(!list.length){toast('No hay ningún dron fuera. Saca uno del armario o de la caja y déjalo en el suelo.');return;}
   if(list.length===1){connect(list[0]);return;}
   const box=$('#dlist');box.innerHTML='';list.forEach((d,i)=>{const b=document.createElement('button');const dist=Math.round(Math.hypot(d.pos.x-myB.x,d.pos.z-myB.z));
@@ -1303,7 +1302,7 @@ function openChooser(){const list=DRONES.filter(d=>d.team==='blue'&&(d.state==='
   $('#chooser').classList.remove('hidden');mode='choose';unlock();chooserList=list;}
 let chooserList=[];function closeChooser(){$('#chooser').classList.add('hidden');if(mode==='choose')mode='walk';}
 function connect(d){active=d;d.ctrl=true;d.rth=false;mode=d.type==='fpv'?'fpv':'recon';lostT=0;setHUDMode(mode);beep(990,.06);
-  if(d.type==='recon'){dcam.fov=60/d.zoom;dcam.aspect=16/9;}else{dcam.fov=100;dcam.aspect=4/3;d.sm={x:0,y:0};}dcam.updateProjectionMatrix();lock();}
+  if(d.type==='recon'){dcam.fov=60/d.zoom;dcam.aspect=16/9;}else{dcam.fov=95;dcam.aspect=4/3;d.q=null;}dcam.updateProjectionMatrix();lock();}
 function disconnect(){if(!active)return;const d=active;d.ctrl=false;active=null;
   if(d.type==='fpv'&&d.state==='flying')toast('El FPV sin piloto caerá. Mejor quedarte hasta el impacto.');
   mode='walk';const w=myB.l2w(.75,-.6);PL.pos.set(w[0],myB.fy,w[1]);PL.yaw=myB.yaw;PL.pitch=-.15;setHUDMode('walk');}
@@ -1414,7 +1413,7 @@ function moveJoy(e){const r=joyEl.getBoundingClientRect();let dx=(e.clientX-r.le
   const l=Math.hypot(dx,dy);if(l>1){dx/=l;dy/=l;}JOY.x=Math.abs(dx)<.12?0:dx;JOY.y=Math.abs(dy)<.12?0:-dy;knob.style.transform=`translate(${dx*45}px,${dy*45}px)`;}
 function pressKey(code){window.dispatchEvent(new KeyboardEvent('keydown',{code,key:''}));window.dispatchEvent(new KeyboardEvent('keyup',{code,key:''}));}
 const TBTN={walk:[['Usar','KeyE','tap','big'],['Correr','run','toggle']],
-  fpv:[['Armar','KeyR','tap'],['Detonar','KeyF','tap'],['Gas +','ShiftLeft','hold'],['Gas −','ControlLeft','hold'],['↺ Q','KeyQ','hold'],['↻ E','KeyE','hold'],['Salir','KeyX','tap','big']],
+  fpv:[['Armar','KeyR','tap'],['Detonar','KeyF','tap'],['Subir','Space','hold'],['Bajar','KeyC','hold'],['Turbo','ShiftLeft','hold'],['Salir','KeyX','tap','big']],
   recon:[['Subir','Space','hold'],['Bajar','KeyQ','hold'],['Térmica','KeyT','tap'],['Zoom','KeyZ','tap'],['Marcar','KeyM','tap'],['A casa','KeyH','tap'],['Aterrizar','KeyL','tap'],['Salir','KeyX','tap']]};
 function buildTouchButtons(m){const box=$('#tbtns');box.innerHTML='';$('#joyl').textContent=m==='fpv'?'acelerador · giro':m==='recon'?'mover dron':'caminar';
   (TBTN[m]||[]).forEach(([label,code,kind,cls])=>{const b=document.createElement('button');b.className='tb'+(kind==='hold'?' hold':'')+(cls?' '+cls:'');b.textContent=label;
@@ -1452,7 +1451,7 @@ const CONFIG_FIREBASE={
   messagingSenderId:"107896274524",
   appId:"1:107896274524:web:3015709404862e0c58b099"
 };
-const NET={on:false,db:null,code:null,me:'p'+Math.random().toString(36).slice(2,10),rival:null,rivalId:null,ref:null,myRef:null,pubT:0,seen:false,left:false,lost:false,body:null,prox:new Map()};
+const NET={on:false,db:null,code:null,me:'p'+Math.random().toString(36).slice(2,10),players:{},ref:null,myRef:null,pubT:0,lost:false,R:new Map(),ever:new Set(),gone:new Set(),MAX:3};
 function netStatus(html){$('#netst').innerHTML=html;}
 function netInit(){if(NET.db)return true;if(typeof firebase==='undefined'){netStatus('No se han cargado los scripts de Firebase. Comprueba la conexión y recarga.');return false;}
   try{if(!firebase.apps||!firebase.apps.length)firebase.initializeApp(CONFIG_FIREBASE);NET.db=firebase.database();return true;}catch(e){netStatus('No se pudo conectar: '+(e.message||e));return false;}}
@@ -1464,55 +1463,67 @@ function setupSide(){SIDE=MODE==='online'&&team==='ru'?'S':'N';PC.z=SIDE==='N'?-
   $('#placet').textContent='Coloca tu búnker en el bosque '+(SIDE==='N'?'norte':'sur');}
 async function createRoom(){if(!netInit())return;netStatus('Creando sala…');
   try{let c=genCode();const s=await NET.db.ref(roomPath(c)+'/meta').once('value');if(s.exists())c=genCode();
-    await NET.db.ref(roomPath(c)+'/meta').set({juego:'fpv',host:team,creada:firebase.database.ServerValue.TIMESTAMP});enterRoom(c);}
+    await NET.db.ref(roomPath(c)+'/meta').set({juego:'fpv',host:team,max:3,creada:firebase.database.ServerValue.TIMESTAMP});enterRoom(c);}
   catch(e){netStatus('No se pudo crear la sala: '+(e.code||e.message)+'. Revisa que las reglas de la base de datos permitan escribir en <b>salas</b>.');}}
 async function joinRoom(c){if(!netInit())return;c=(c||'').trim().toUpperCase();if(c.length!==4){netStatus('El código tiene 4 caracteres.');return;}netStatus('Buscando la sala '+c+'…');
   try{const ms=await NET.db.ref(roomPath(c)+'/meta').once('value');if(!ms.exists()){netStatus('No existe la sala '+c+'. Comprueba el código.');return;}
     const js=(await NET.db.ref(roomPath(c)+'/jug').once('value')).val()||{};const others=Object.keys(js).filter(k=>k!==NET.me);
-    if(others.length>=2){netStatus('La sala '+c+' ya está llena.');return;}
-    const taken=others.length?js[others[0]].team:ms.val().host;setTeam(taken==='ua'?'ru':'ua');enterRoom(c);}
+    if(others.length>=NET.MAX){netStatus('La sala '+c+' ya está llena (3 jugadores).');return;}
+    const n={ua:0,ru:0};others.forEach(k=>{if(js[k].team)n[js[k].team]++;});
+    let t=others.length?(n.ua<=n.ru?'ua':'ru'):(ms.val().host==='ua'?'ru':'ua');if(others.length&&n.ua===n.ru)t=ms.val().host==='ua'?'ru':'ua';
+    setTeam(t);enterRoom(c);}
   catch(e){netStatus('Error de conexión: '+(e.code||e.message));}}
 function inviteLink(){return location.origin+location.pathname+'#fpv='+NET.code;}
 function enterRoom(c){NET.on=true;NET.code=c;NET.ref=NET.db.ref(roomPath(c));NET.myRef=NET.ref.child('jug/'+NET.me);
-  NET.myRef.onDisconnect().remove();NET.myRef.set({team,t:Date.now(),placed:false});
+  NET.myRef.onDisconnect().remove();NET.myRef.set({team,t:Date.now(),placed:false,alive:true});
   const ev=NET.ref.child('ev');const k0=ev.push().key;
   ev.orderByKey().startAt(k0).on('child_added',s=>{const e=s.val();if(e&&e.by!==NET.me)onNetEvent(e);});
-  NET.ref.child('jug').on('value',s=>{const all=s.val()||{};const id=Object.keys(all).find(k=>k!==NET.me);
-    if(id){NET.rivalId=id;NET.rival=all[id];if(!NET.seen){NET.seen=true;if(mode!=='menu')toast('El rival se ha conectado');}}
-    else{if(NET.seen&&!NET.left&&!gameOver){NET.left=true;toast('El rival se ha desconectado',true);}NET.rival=null;}
-    lobbyText();});
+  NET.ref.child('jug').on('value',s=>{const all=s.val()||{};delete all[NET.me];
+    for(const id in all){if(!NET.players[id]&&mode!=='menu')toast('Se ha unido un jugador de '+TEAMS[all[id].team].name);NET.ever.add(id);}
+    for(const id in NET.players)if(!all[id]&&!gameOver){NET.gone.add(id);toast('Un jugador de '+TEAMS[NET.players[id].team].name+' se ha desconectado',true);}
+    NET.players=all;lobbyText();});
   document.querySelectorAll('#tseg button,#mseg button').forEach(b=>b.disabled=true);$('#linkrow').classList.remove('hidden');
   try{history.replaceState(null,'','#fpv='+c);}catch(e){}lobbyText();}
-function lobbyText(){if(!NET.on)return;const T_=TEAMS[team];const r=NET.rival;
-  netStatus(`Sala <b>${NET.code}</b>. Juegas con <b>${T_.name}</b> en el bosque ${team==='ru'?'sur':'norte'}. `+(r?`Rival conectado: <b>${TEAMS[r.team].name}</b>. Ya podéis colocar los búnkeres.`:'Esperando al rival… Pásale el código o el enlace.'));}
+function rivals(){return Object.entries(NET.players).filter(([k,v])=>v.team!==team);}
+function allies(){return Object.entries(NET.players).filter(([k,v])=>v.team===team);}
+function lobbyText(){if(!NET.on)return;const T_=TEAMS[team];const ids=Object.keys(NET.players);
+  const lst=ids.map(k=>TEAMS[NET.players[k].team].name).join(', ');
+  netStatus(`Sala <b>${NET.code}</b> (${ids.length+1}/3). Juegas con <b>${T_.name}</b> en el bosque ${team==='ru'?'sur':'norte'}. `+
+    (ids.length?`Conectados: <b>${lst}</b>. `+(rivals().length?'Ya podéis colocar los búnkeres.':'Falta alguien del otro bando.'):'Esperando jugadores… Pasa el código o el enlace (hasta 3).'));}
 $('#bCreate').onclick=()=>{initAudio();createRoom();};
 $('#bJoin').onclick=()=>{initAudio();joinRoom($('#codeIn').value);};
 $('#codeIn').addEventListener('keydown',e=>{e.stopPropagation();if(e.key==='Enter')joinRoom(e.target.value);});
 $('#bCopy').onclick=async()=>{const l=inviteLink();try{await navigator.clipboard.writeText(l);$('#bCopy').textContent='Enlace copiado';}catch(e){prompt('Copia este enlace:',l);}};
 function netPublish(force){if(!NET.myRef)return;const d={};
-  for(const o of DRONES)if(o.team==='blue'&&(o.state==='flying'||o.state==='ground'))d['d'+o.id]={ty:o.type,st:o.state,x:+o.pos.x.toFixed(2),y:+o.pos.y.toFixed(2),z:+o.pos.z.toFixed(2),
+  for(const o of DRONES)if(o.team==='blue'&&!o.remote&&(o.state==='flying'||o.state==='ground'))d['d'+o.id]={ty:o.type,st:o.state,x:+o.pos.x.toFixed(2),y:+o.pos.y.toFixed(2),z:+o.pos.z.toFixed(2),
     yw:+o.yaw.toFixed(3),pt:+o.pitch.toFixed(3),rl:+o.roll.toFixed(3),vx:+o.vel.x.toFixed(1),vz:+o.vel.z.toFixed(1),th:+o.throttle.toFixed(2),ar:o.armed?1:0};
   const u={team,t:Date.now(),placed:!!myB,alive:PL.alive,lost:NET.lost,d};
   if(myB)Object.assign(u,{bx:+myB.x.toFixed(2),bz:+myB.z.toFixed(2),byaw:+myB.yaw.toFixed(4),gen:myB.genOn,px:+PL.pos.x.toFixed(2),py:+PL.pos.y.toFixed(2),pz:+PL.pos.z.toFixed(2),yaw:+PL.yaw.toFixed(3),inside:PL.inside});
   NET.myRef.update(u).catch(()=>{});}
 function netTick(dt){NET.pubT-=dt;if(NET.pubT<=0){NET.pubT=.12;netPublish();}}
-function netBoom(p,big){if(NET.ref)NET.ref.child('ev').push({k:'boom',x:+p.x.toFixed(2),y:+p.y.toFixed(2),z:+p.z.toFixed(2),big:big?1:0,by:NET.me,t:Date.now()}).catch(()=>{});}
-function onNetEvent(e){if(e.k==='boom'){const p=new THREE.Vector3(e.x,e.y,e.z);if(e.big)LASTBLAST={p:p.clone(),t:clockT,trail:[]};for(const o of NET.prox.values())if(o.state!=='dead'&&o.pos.distanceTo(p)<3)killDrone(o);
-  explosionFX(p,!!e.big);boom(p,!!e.big);if(e.big&&!gameOver)applyBlast(p,'red');}}
-function netSync(dt){const R_=NET.rival;
-  if(R_&&R_.placed&&!enemyB&&myB)enemyB=createBunker('red',R_.bx,R_.bz,R_.byaw,false);
-  if(enemyB&&R_&&enemyB.alive&&R_.gen!==undefined&&enemyB.genOn!==R_.gen)setGenerator(enemyB,!!R_.gen);
-  const seen=new Set();
-  if(R_&&R_.d)for(const k in R_.d){const v=R_.d[k];seen.add(k);let p=NET.prox.get(k);
-    if(!p){p=newDrone(v.ty,'red');p.remote=true;p.pos.set(v.x,v.y,v.z);p.yaw=v.yw;p.obj.visible=true;NET.prox.set(k,p);}
-    if(p.state==='dead')continue;p.tgt=v;p.state=v.st;p.throttle=v.th||.5;p.armed=!!v.ar;}
-  for(const [k,p] of NET.prox)if(!seen.has(k)){if(p.state!=='dead'){explosionFX(p.pos,false);killDrone(p);}scene.remove(p.obj);DRONES.splice(DRONES.indexOf(p),1);NET.prox.delete(k);}
-  const kk=1-Math.exp(-10*dt);
-  for(const p of NET.prox.values())if(p.tgt&&p.state!=='dead'){const t=p.tgt;p.pos.x+=(t.x-p.pos.x)*kk;p.pos.y+=(t.y-p.pos.y)*kk;p.pos.z+=(t.z-p.pos.z)*kk;
-    p.yaw+=angDelta(p.yaw,t.yw)*kk;p.pitch=t.pt;p.roll=t.rl;p.vel.set(t.vx||0,0,t.vz||0);p.obj.visible=true;}
-  if(R_&&R_.placed&&myB&&!NET.body){NET.body=spawnSoldier('red',R_.px,R_.pz,{v:0});NET.body.remote=true;}
-  if(NET.body&&R_){NET.body.tgt=R_;if(NET.body.alive)NET.body.mesh.visible=!R_.inside&&R_.alive!==false;}
-  if(R_&&R_.lost&&!gameOver)endGame(true,R_.alive===false?'Has eliminado al piloto rival.':'El búnker del rival ha caído.');}
+function netBoom(p,big){if(NET.ref)NET.ref.child('ev').push({k:'boom',x:+p.x.toFixed(2),y:+p.y.toFixed(2),z:+p.z.toFixed(2),big:big?1:0,by:NET.me,tm:team,t:Date.now()}).catch(()=>{});}
+function onNetEvent(e){if(e.k==='boom'){const p=new THREE.Vector3(e.x,e.y,e.z);if(e.big)LASTBLAST={p:p.clone(),t:clockT,trail:[]};
+  for(const r of NET.R.values())for(const o of r.prox.values())if(o.state!=='dead'&&o.pos.distanceTo(p)<3)killDrone(o);
+  explosionFX(p,!!e.big);boom(p,!!e.big);const foe=(e.tm||(NET.players[e.by]||{}).team)!==team;if(e.big&&!gameOver)applyBlast(p,foe?'red':'blue');}}
+function netSync(dt){const kk=1-Math.exp(-10*dt);
+  for(const [id,P_] of Object.entries(NET.players)){let r=NET.R.get(id);if(!r){r={prox:new Map(),B:null,body:null};NET.R.set(id,r);}
+    const foe=P_.team!==team,tm=foe?'red':'blue';
+    if(P_.placed&&!r.B&&myB){r.B=createBunker(tm,P_.bx,P_.bz,P_.byaw,false);if(foe&&!enemyB)enemyB=r.B;}
+    if(r.B&&r.B.alive&&P_.gen!==undefined&&r.B.genOn!==!!P_.gen)setGenerator(r.B,!!P_.gen);
+    const seen=new Set();
+    if(P_.d)for(const k in P_.d){const v=P_.d[k];seen.add(k);let p=r.prox.get(k);
+      if(!p){p=newDrone(v.ty,tm);p.remote=true;p.pos.set(v.x,v.y,v.z);p.yaw=v.yw;p.obj.visible=true;r.prox.set(k,p);}
+      if(p.state==='dead')continue;p.tgt=v;p.state=v.st;p.throttle=v.th||.5;p.armed=!!v.ar;}
+    for(const [k,p] of r.prox)if(!seen.has(k)){if(p.state!=='dead'){explosionFX(p.pos,false);killDrone(p);}scene.remove(p.obj);DRONES.splice(DRONES.indexOf(p),1);r.prox.delete(k);}
+    for(const p of r.prox.values())if(p.tgt&&p.state!=='dead'){const t=p.tgt;p.pos.x+=(t.x-p.pos.x)*kk;p.pos.y+=(t.y-p.pos.y)*kk;p.pos.z+=(t.z-p.pos.z)*kk;
+      p.yaw+=angDelta(p.yaw,t.yw)*kk;p.pitch=t.pt;p.roll=t.rl;p.vel.set(t.vx||0,0,t.vz||0);p.obj.visible=true;}
+    if(P_.placed&&myB&&!r.body){r.body=spawnSoldier(tm,P_.px,P_.pz,{v:foe?0:1});r.body.remote=true;}
+    if(r.body){r.body.tgt=P_;if(r.body.alive){r.body.mesh.visible=!P_.inside&&P_.alive!==false;if(P_.alive===false)killSoldier(r.body);}}}
+  for(const [id,r] of NET.R)if(!NET.players[id]&&!r.cleaned){r.cleaned=true;for(const p of r.prox.values()){killDrone(p);scene.remove(p.obj);DRONES.splice(DRONES.indexOf(p),1);}r.prox.clear();if(r.body)r.body.mesh.visible=false;}
+  if(gameOver)return;
+  const foes=[...NET.ever].filter(id=>{const P_=NET.players[id]||NET.last&&NET.last[id];return P_&&P_.team!==team;});
+  NET.last=Object.assign(NET.last||{},NET.players);
+  if(foes.length&&foes.every(id=>NET.gone.has(id)||(NET.players[id]&&NET.players[id].lost)))endGame(true,foes.length>1?'Has eliminado a todos los pilotos enemigos.':'Has eliminado al piloto enemigo.');}
 {const m=location.hash.match(/fpv=([A-Z0-9]{4})/i);if(m){setMode('online');$('#codeIn').value=m[1].toUpperCase();setTimeout(()=>joinRoom(m[1]),300);}}
 
 
@@ -1523,7 +1534,7 @@ function startReplay(B,done){mode='replay';setHUDMode('replay');unlock();$('#tou
   toast('REPETICIÓN · vista desde otro dron');toastT=99;}
 function updateReplay(dt){if(!RP)return;RP.t+=dt;const r=RP;
   if(r.t<r.dA){const tt=r.tr[0].t+r.t;let i=0;while(i<r.tr.length-2&&r.tr[i+1].t<tt)i++;const a=r.tr[i],b=r.tr[i+1];const k=clamp((tt-a.t)/Math.max(1e-3,b.t-a.t),0,1);
-    const pos=_v1.copy(a.p).lerp(b.p,k);ghost2.visible=true;ghost2.position.copy(pos);if(a.q)ghost2.quaternion.copy(a.q).multiply(QY180);
+    const pos=_v1.copy(a.p).lerp(b.p,k);ghost2.visible=true;ghost2.position.copy(pos);ghost2.rotation.set(a.pitch,a.yaw+Math.PI,a.roll,'YXZ');
     const back=_v2.set(Math.sin(a.yaw),0,Math.cos(a.yaw)).multiplyScalar(5);camera.position.copy(pos).add(back);camera.position.y+=1.8;camera.lookAt(pos);}
   else{ghost2.visible=false;if(!r.boomed){r.boomed=true;explosionFX(r.p,true);boom(r.p,true);}const a=(r.t-r.dA)*.45;
     camera.position.set(r.p.x+Math.cos(a)*16,Math.max(GY(r.p.x,r.p.z)+6,r.p.y+7),r.p.z+Math.sin(a)*16);camera.lookAt(r.p);
@@ -1538,7 +1549,7 @@ function update(dt){
   if(mode==='walk'||mode==='fpv'||mode==='recon'||mode==='choose'){
     if(mode==='walk'&&PL.alive)updatePlayer(dt);
     for(const d of DRONES){const ctrl=d===active&&(mode==='fpv'||mode==='recon');
-      if(d.team==='blue'){if(d.type==='fpv')updateFPV(d,dt,ctrl);else{updateRecon(d,dt,ctrl);if(d.state==='stored')d.battery=Math.min(1,d.battery+dt/90);}}
+      if(d.team==='blue'&&!d.remote){if(d.type==='fpv')updateFPV(d,dt,ctrl);else{updateRecon(d,dt,ctrl);if(d.state==='stored')d.battery=Math.min(1,d.battery+dt/90);}}
       if(d.state==='flying'||d.state==='ground')setDroneVisual(d,dt);}
     if(mode==='recon'&&active&&wheel){active.zoom=clamp(active.zoom*(wheel<0?2:.5),1,8);dcam.fov=60/active.zoom;dcam.updateProjectionMatrix();}wheel=0;
     if(!gameOver&&MODE==='ia'){updateEnemy(dt);checkPilot();}if(NET.on)netSync(dt);
@@ -1551,7 +1562,7 @@ function disconnect2(){mode='walk';const w=myB.l2w(.75,-.6);PL.pos.set(w[0],myB.
 function updateBeacons(){}
 function render(){const feed=mode==='fpv'||mode==='recon';
   if(feed&&(active||lostT>0)){
-    const d=active;if(d){if(d.type==='fpv'){if(d.q){dcam.quaternion.copy(d.q).multiply(UPTILT);const sh=.0035*d.throttle+.0012;dcam.rotateX((Math.random()-.5)*sh);dcam.rotateZ((Math.random()-.5)*sh);dcam.fov=100+clamp(d.vel.length()*.3,0,20);dcam.updateProjectionMatrix();dcam.position.copy(d.pos).addScaledVector(_v1.set(0,0,-1).applyQuaternion(d.q),.12);}else{dcam.position.copy(d.pos);dcam.rotation.set(d.pitch+.42,d.yaw,d.roll);}}
+    const d=active;if(d){if(d.type==='fpv'){if(true){dcam.position.copy(d.pos);dcam.rotation.set(d.pitch,d.yaw,d.roll);const sh=.0015+.002*d.throttle;dcam.rotateX((Math.random()-.5)*sh);dcam.fov=95+clamp(d.vel.length()*.35,0,20);dcam.updateProjectionMatrix();}}
       else{dcam.position.copy(d.pos);dcam.position.y-=.08;dcam.rotation.set(d.gimbal,d.yaw,0);}d.obj.visible=false;}
     updateVisibility(dcam,true);if(frameN%3===0)followShadow(dcam,80);renderer.shadowMap.autoUpdate=frameN%3===0;
     const isRec=d?d.type==='recon':active===null&&lostMsg&&false;
