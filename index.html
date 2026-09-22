@@ -158,7 +158,7 @@ body.touch #fps{top:auto;bottom:calc(172px + env(safe-area-inset-bottom,0px));ri
 <div id="menu" class="hidden"><div class="card">
   <h1>Búnker oculto</h1>
   <div class="row"><label>Modo</label>
-    <div class="seg" id="mseg"><button data-m="ia" class="on">Contra la IA</button><button data-m="online">Online (2 o 3 jugadores)</button></div></div>
+    <div class="seg" id="mseg"><button data-m="ia" class="on">Caza contra la IA</button><button data-m="online">Online (2 o 3 jugadores)</button></div></div>
   <div id="online" class="hidden">
     <div class="row"><button class="btn ghost" id="bCreate">Crear sala</button><input id="codeIn" maxlength="4" placeholder="Código" autocomplete="off" spellcheck="false"><button class="btn ghost" id="bJoin">Unirse</button></div>
     <p id="netst" class="dim">Crea una sala y pasa el código o el enlace. Caben 3 jugadores: los que entran van al bando con menos gente (2 contra 1).</p>
@@ -173,7 +173,7 @@ body.touch #fps{top:auto;bottom:calc(172px + env(safe-area-inset-bottom,0px));ri
     <li>Saca un dron, déjalo en el suelo fuera, vuelve al PC y vuela.</li>
     <li>Encuentra el búnker enemigo con la térmica y destrúyelo con un kamikaze.</li>
   </ol>
-  <p class="dim">Un dron de reconocimiento enemigo patrulla tu zona. Si detecta calor o movimiento cerca de tu búnker, mandarán un FPV a por ti. Oirás su zumbido cuando esté cerca.</p>
+  <p class="dim"><b>Caza contra la IA:</b> nadie te ataca. El mapa está lleno de soldados, vehículos y tanques enemigos: cázalos desde tu búnker o tu jeep. <b>Online:</b> otros jugadores te buscan a ti.</p>
   <div class="row"><label>Calidad gráfica</label>
     <div class="seg" id="qseg"><button data-q="baja">Baja</button><button data-q="media">Media</button><button data-q="alta">Alta</button></div></div>
   <div class="row"><button class="btn" id="bPlace">Elegir ubicación del búnker</button></div>
@@ -1001,12 +1001,14 @@ function droneHit(d){const p=d.pos,gy=GY(p.x,p.z);let hit=null;
   if(!hit)for(const h of HOUSE_COLL)if(Math.abs(h.x-p.x)<h.r+2&&Math.abs(h.z-p.z)<h.r+2&&Math.hypot(h.x-p.x,h.z-p.z)<h.r&&p.y<h.top){hit={what:'house'};break;}
   if(!hit)for(const B of BUNKERS){const l=B.w2l(p.x,p.z);if(Math.abs(l[0])<5.2&&l[1]>-4&&l[1]<3&&p.y<B.fy+2.9){hit={what:'bunker',B};break;}}
   if(!hit)for(const S_ of SOLDIERS)if(S_.alive&&Math.abs(S_.pos.x-p.x)<.9&&Math.abs(S_.pos.z-p.z)<.9&&p.y-S_.pos.y<1.9&&p.y>S_.pos.y-.2){hit={what:'soldier'};break;}
+  if(!hit&&MODE==='ia'){const v=aivHit(p);if(v)hit={what:'vehicle',v};}
   if(!hit)for(const o of DRONES)if(o!==d&&o.team!==d.team&&(o.state==='flying'||o.state==='ground')&&o.pos.distanceTo(p)<1.4){hit={what:'drone',o};break;}
   return hit;}
 function applyBlast(p,team){
   for(const S_ of SOLDIERS){const dd=Math.hypot(S_.pos.x-p.x,S_.pos.z-p.z),dy=Math.abs(S_.pos.y+1-p.y);
     if(S_.team===team&&S_.remote)continue;if(S_.alive&&dd<7.5&&dy<6)killSoldier(S_);else if(S_.alive&&dd<45){S_.panic=MR(4,7);S_.panicDir=Math.atan2(S_.pos.x-p.x,S_.pos.z-p.z)+MR(-.5,.5);}}
   for(const B of BUNKERS){if(!B.alive||B.team===team)continue;const dd=Math.hypot(B.x-p.x,B.z-p.z);if(dd<7&&p.y<B.fy+6)destroyBunker(B);}
+  if(team==='blue')for(const v of AIV)if(v.alive&&Math.hypot(v.x-p.x,v.z-p.z)<(v.kind==='tank'?v.r+1.2:v.r+3.5)&&p.y<v.grp.position.y+v.top+3)destroyAIV(v);
   for(const t of TREES)if(!t.hidden&&Math.abs(t.x-p.x)<5&&Math.abs(t.z-p.z)<5&&Math.hypot(t.x-p.x,t.z-p.z)<4.5&&p.y<t.y+t.h+2){hideTreesNear(t.x,t.z,.5);if(t.k!=='bush'&&t.k!=='reed'&&Math.random()<.5)makeFire(t.x,t.y+.3,t.z,25,1.4);}
   for(const h of HOUSE_COLL)if(Math.hypot(h.x-p.x,h.z-p.z)<h.r+3&&p.y<h.top+2){makeFire(p.x,GY(p.x,p.z),p.z,50,2.5);debris(p,12,[0xe9e4d6,0x8f8b83,0x5b4632,0x7a8a86],10,1.1);break;}
   for(const o of DRONES)if((o.state==='ground'||o.state==='flying')&&o.pos.distanceTo(p)<5){explosionFX(o.pos,false);killDrone(o);if(o===ENEMY.recon)ENEMY.respawn=90;}
@@ -1016,7 +1018,7 @@ function detonate(d,why){const p=d.pos.clone();if(d.armed)LASTBLAST={p:p.clone()
 function destroyBunker(B){B.alive=false;B.group.scale.y=.45;B.group.position.y-=.3;const bp=new THREE.Vector3(B.x,B.fy+1.5,B.z);explosionFX(bp,true);debris(bp,26,[0x6b5236,0x5a4430,0x5b4a33,0x4b5536,0x7a5f40],12,1.6);makeFire(B.x,B.fy,B.z,70,3);
   makeSmoke(B.x,B.fy+1,B.z,{count:26,color:0x2b2724,rise:4,grow:3,life:22,size:4,op:.7,wind:1.5});
   B.heatGen.material.color.setRGB(1,0,1);B.heatRoof.material.color.setRGB(1,0,1);if(B.light)B.light.intensity=0;
-  if(B===enemyB){toast('¡Búnker enemigo destruido! Ahora acaba con el piloto.');if(ENEMY.pilot&&ENEMY.pilot.alive&&Math.hypot(ENEMY.pilot.pos.x-B.x,ENEMY.pilot.pos.z-B.z)<5)killSoldier(ENEMY.pilot);}
+  if(B===enemyB){toast('¡Búnker enemigo destruido!');if(ENEMY.pilot&&ENEMY.pilot.alive&&Math.hypot(ENEMY.pilot.pos.x-B.x,ENEMY.pilot.pos.z-B.z)<5)killSoldier(ENEMY.pilot);}
   else if(B===myB)toast('¡Tu búnker ha sido destruido! Sigues vivo: escóndete.',true);}
 
 /* ================= vuelo ================= */
@@ -1049,7 +1051,7 @@ function updateFPV(d,dt,ctrl){
     else if((hit.what==='house'||hit.what==='bunker')&&!(d.armed&&vs>8)){d.pos.addScaledVector(d.vel,-dt*1.5);d.vel.multiplyScalar(-.3);}
     else{if(hit.what==='drone'){explosionFX(hit.o.pos,false);killDrone(hit.o);if(hit.o===ENEMY.recon){ENEMY.recon=null;ENEMY.respawn=90;toast('Dron de reconocimiento enemigo derribado');}
         if(hit.o===ENEMY.strike){ENEMY.strike=null;ENEMY.det=.55;toast('¡FPV enemigo interceptado!');}}
-      detonate(d,{ground:'Contra el suelo',tree:'Contra un árbol',house:'Contra un edificio',bunker:'Contra un búnker',soldier:'Impacto directo',drone:'Choque en el aire'}[hit.what]);return;}}
+      detonate(d,{ground:'Contra el suelo',tree:'Contra un árbol',house:'Contra un edificio',bunker:'Contra un búnker',soldier:'Impacto directo',drone:'Choque en el aire',vehicle:'Impacto en el vehículo'}[hit.what]);return;}}
   if(d.team==='blue'){const B=d.homeV?vehHome:myB;const dist=Math.hypot(d.pos.x-B.x,d.pos.z-B.z);
     d.noise=clamp(smooth(1700,3200,dist)*.8+(Math.random()<.003?.1:0),0,1);if(dist>3300){detonate(d,'Fuera de alcance');return;}}
   if(d.battery<=-.02){detonate(d,'Batería agotada');}}
@@ -1272,6 +1274,7 @@ function objective(){if(!myB)return'';const out=DRONES.some(d=>d.team==='blue'&&
   if(PL.carry)return PL.inside?'Sal por la puerta y pulsa E para dejar el dron en el suelo.':'Pulsa E para dejarlo en el suelo. Luego vuelve al PC.';
   if(out&&mode==='walk')return'Vuelve al PC (mesa del fondo) y pulsa E para pilotar.';
   if(MODE==='online'&&!(rivals().length&&rivals().every(([k,v])=>v.placed)))return'Esperando a que los rivales escondan su búnker. Mientras, prepara un dron.';
+  if(MODE==='ia')return`Caza: destruye los ${AIV.length} vehículos y tanques enemigos con FPV kamikaze. Quedan ${AIV.filter(v=>v.alive).length}.`;
   if(!MARK)return'Busca el búnker enemigo en el bosque '+(SIDE==='N'?'sur':'norte')+' con la térmica del dron de vigilancia. Marca lo que veas con clic.';
   return'Tienes un objetivo marcado. Lanza un FPV kamikaze, ármalo con R y guíate por el rombo del OSD.';}
 const mm=$('#mm'),mx=mm.getContext('2d');const mmBase=document.createElement('canvas');let mmS=0;
@@ -1286,7 +1289,8 @@ let hudT=0,fpsAcc=0,fpsN=0;
 function updateHUD(dt){hudT-=dt;toastT-=dt;if(toastT<=0)$('#toast').style.opacity=0;if(hudT>0)return;hudT=.12;
   objt.textContent=objective();let er=1e9,efpv=false;for(const o of DRONES)if(o.team==='red'&&o.state==='flying'){const dd=Math.hypot(o.pos.x-PL.pos.x,o.pos.z-PL.pos.z);if(dd<er){er=dd;efpv=o.type==='fpv';}}
   if(MODE==='online'){detb.parentNode.style.display='none';detp.textContent=rivals().length+' rival'+(rivals().length===1?'':'es')+(allies().length?' · '+allies().length+' aliado':'');detl.textContent=er<300?(efpv?'¡FPV enemigo cerca!':'Dron enemigo cerca'):'Sin drones enemigos cerca';detEl.classList.toggle('alert',er<300);}
-  else{const det=ENEMY.det;detb.style.width=(det*100)+'%';detb.style.background=det>.7?'var(--red)':det>.35?'#e0a040':'var(--ok)';detp.textContent=Math.round(det*100)+' %';
+  else{detb.parentNode.style.display='none';detl.textContent=`Bajas: ${stats.kills} soldados · ${HUNT.veh} vehículos · ${HUNT.tanks} tanques`;detp.textContent='';detEl.classList.remove('alert');}
+  if(false){const det=ENEMY.det;detb.style.width=(det*100)+'%';detb.style.background=det>.7?'var(--red)':det>.35?'#e0a040':'var(--ok)';detp.textContent=Math.round(det*100)+' %';
   detl.textContent=ENEMY.strike?'¡FPV enemigo en camino!':er<250?'Dron enemigo cerca':'Riesgo de detección';detEl.classList.toggle('alert',!!ENEMY.strike||er<250);}
   invt.textContent=PL.carry?(PL.carry.type==='fpv'?'FPV kamikaze':'dron de vigilancia'):'nada';
   const it=mode==='walk'?interaction():null;if(mode==='walk'&&!it&&!PL.carry&&!PL.inside&&nearVehicle()){promptEl.classList.remove('hidden');promptEl.innerHTML='<kbd>F</kbd>Subir al vehículo';}
@@ -1382,7 +1386,7 @@ function startGame(){const s=PC.sel;ghost.visible=false;$('#placeui').classList.
   const vp=HOUSES.slice(0,6).map(h=>{const c=Math.cos(h.yaw),s2=Math.sin(h.yaw);return[h.x+6*s2,h.z+6*c];});
   const rp=[];for(let i=60;i<ROADS[1].s.length-20;i+=12)rp.push([ROADS[1].s[i].x+2,ROADS[1].s[i].z]);const rp2=rp.concat(rp.slice().reverse());
   void rp2;void vp;
-  {const pts=[[.5,-.5],[.5,-.5],[0,2.3],[0,6],[3.3,3.6],[0,6],[0,2.3]].map(a=>eb.l2w(a[0],a[1]));ENEMY.pilot=spawnSoldier('red',pts[0][0],pts[0][1],{yaw:eb.yaw,path:pts,speed:1});ENEMY.pilot.idle=MR(20,50);}
+  populateHunt(eb);
   ENEMY.respawn=40;
   const w=myB.l2w(0,1.6);PL.pos.set(w[0],myB.fy,w[1]);PL.yaw=myB.yaw;PL.pitch=-.1;
   mode='walk';stats.t0=clockT;setHUDMode('walk');sizeMM();lock();
@@ -1597,6 +1601,54 @@ function launchFromVeh(type){let d;if(type==='fpv'){d=newDrone('fpv','blue');d.h
   d.state='ground';d.obj.visible=true;d.rth=false;setDroneVisual(d,0);connect(d);}
 function strikeTarget(){return PL.inVeh?{x:VEH.x,z:VEH.z,y:VEH.y+1.2}:{x:myB.x,z:myB.z,y:myB.fy+1.2};}
 
+/* ================= modo caza contra la IA: vehículos, tanques y soldados ================= */
+const AIV=[];const HUNT={veh:0,tanks:0,total:0};
+function tankModel(){const g=new THREE.Group();const parts=[];const OL=0x4a5236,DK=0x23261e;
+  const b=(c,x,y,z,w,h,d,rx=0,ry=0,rz=0,o)=>parts.push(P(BOX,c,x,y,z,rx,ry,rz,w,h,d,o));
+  b(OL,0,1.05,0,3.2,.7,6.6);b(0x40482f,0,.62,0,3.0,.5,6.2);b(OL,0,1.2,-3.35,3.0,.4,.5,.6);
+  for(const sd of [-1,1]){b(DK,sd*1.55,.6,0,.55,.95,6.6);for(let k=0;k<6;k++)parts.push(P(CYL,0x2d3026,sd*1.55,.42,-2.6+k*1.04,0,0,Math.PI/2,.36,.6,.36));
+    b(0x39402c,sd*1.55,1.12,0,.6,.06,6.7);}
+  for(let k=0;k<3;k++)b(0x5a4b33,-.9+k*.9,1.48,2.4,.7,.18,.6);
+  const hull=new THREE.Mesh(merge(parts),vcMat);hull.castShadow=true;hull.receiveShadow=true;g.add(hull);
+  const tp=[];tp.push(P(HEMI,OL,0,0,0,0,0,0,1.55,.75,1.8,{jitter:.05}));tp.push(P(BOX,0x40482f,0,.1,.9,0,0,0,2.2,.45,1.2));
+  tp.push(P(CYL,0x3a3f2c,0,.35,-2.6,Math.PI/2,0,0,.09,4.2,.09));tp.push(P(CYL,0x2d3026,0,.35,-.7,Math.PI/2,0,0,.16,.6,.16));
+  tp.push(P(CYL,0x3a3f2c,.5,.85,.2,0,0,0,.28,.25,.28));for(let k=0;k<8;k++)tp.push(P(BOX,0x55603f,Math.cos(k*.8)*1.35,.12,Math.sin(k*.8)*1.5,0,-k*.8,0,.5,.22,.3));
+  const tur=new THREE.Mesh(merge(tp),vcMat);tur.castShadow=true;tur.position.y=1.4;g.add(tur);g.userData.tur=tur;
+  const h=addHeatChild(g,new THREE.BoxGeometry(2.6,.8,2),1);h.position.set(0,1.1,2.2);return g;}
+function jeepModel(){const g=new THREE.Group();const j=modelGroup('jeep');j.scale.setScalar(1.2);j.rotation.y=Math.PI;g.add(j);
+  const h=addHeatChild(g,new THREE.BoxGeometry(1.3,.7,1),.9);h.position.set(0,.75,-1.15);return g;}
+function spawnAIV(kind,route,t0){const grp=kind==='tank'?tankModel():jeepModel();scene.add(grp);
+  const v={kind,grp,route,i:t0%route.length,dir:1,x:route[t0%route.length][0],z:route[t0%route.length][1],yaw:0,alive:true,
+    speed:kind==='tank'?3.6:MR(9,13),r:kind==='tank'?3.3:2.1,top:kind==='tank'?2.6:1.7,loop:kind==='tank',sway:MR(0,6)};
+  AIV.push(v);HUNT.total++;return v;}
+function updateAIV(dt,t){for(const v of AIV){if(!v.alive)continue;const tg=v.route[v.i];const dx=tg[0]-v.x,dz=tg[1]-v.z,d=Math.hypot(dx,dz);
+    if(d<(v.kind==='tank'?4:3)){if(v.loop)v.i=(v.i+1)%v.route.length;else{if(v.i+v.dir<0||v.i+v.dir>=v.route.length)v.dir*=-1;v.i+=v.dir;}continue;}
+    const ty=Math.atan2(-dx,-dz);const dy=angDelta(v.yaw,ty);v.yaw+=clamp(dy,-(v.kind==='tank'?.5:1.4)*dt,(v.kind==='tank'?.5:1.4)*dt);
+    const sp=v.speed*(Math.abs(dy)>.8?.35:1);v.x-=Math.sin(v.yaw)*sp*dt;v.z-=Math.cos(v.yaw)*sp*dt;
+    const c=Math.cos(v.yaw),s=Math.sin(v.yaw),L=v.kind==='tank'?3:1.7;const hf=GY(v.x-s*L,v.z-c*L),hb=GY(v.x+s*L,v.z+c*L);
+    v.grp.position.set(v.x,(hf+hb)/2,v.z);v.grp.rotation.set(Math.atan2(hf-hb,2*L),v.yaw,0,'YXZ');
+    if(v.grp.userData.tur)v.grp.userData.tur.rotation.y=Math.sin(t*.2+v.sway)*1.2;}}
+function destroyAIV(v){if(!v.alive)return;v.alive=false;
+  v.grp.traverse(o=>{if(o.isMesh&&!o.userData.heat){o.material=o.material.clone();if(o.material.color)o.material.color.multiplyScalar(.22);if(o.material.map)o.material.color.setRGB(.15,.14,.13);}});
+  const p=new THREE.Vector3(v.x,v.grp.position.y+1.2,v.z);debris(p,v.kind==='tank'?18:12,[0x2a2420,0x3a3f2c,0x4b5536],10,v.kind==='tank'?1.4:1);
+  makeFire(v.x,v.grp.position.y+.4,v.z,120,v.kind==='tank'?2.6:1.8);
+  if(v.grp.userData.tur){const tu=v.grp.userData.tur;tu.position.y+=.6;tu.rotation.x=.35;tu.rotation.z=-.25;}
+  if(v.kind==='tank')HUNT.tanks++;else HUNT.veh++;
+  toast(v.kind==='tank'?'¡Tanque destruido!':'¡Vehículo destruido!');
+  if(AIV.every(o=>!o.alive)&&!gameOver)endGame(true,`Has destruido todos los blindados y vehículos. Soldados abatidos: ${stats.kills}.`);}
+function aivHit(p){for(const v of AIV){if(!v.alive)continue;if(Math.hypot(v.x-p.x,v.z-p.z)<v.r&&p.y<v.grp.position.y+v.top)return v;}return null;}
+function randField(r){for(let k=0;k<60;k++){const x=MR(-680,680),z=MR(-420,470);if(Math.hypot(x-VX,z-VZ)<VR+50||inForest(x,z,-20)||Math.hypot(x-POND.x,z-POND.z)<60)continue;return[x,z];}return[0,0];}
+function populateHunt(eb){
+  for(let i=0;i<6;i++){const a=i/6*6.28;const pts=[0,1,2,3,4,5].map(k=>eb.l2w(Math.cos(a+k*1.05)*16,Math.sin(a+k*1.05)*16));spawnSoldier('red',pts[0][0],pts[0][1],{path:pts,speed:1.1});}
+  for(let k=0;k<ENEMY_TRENCH.length;k++){const p=ENEMY_TRENCH[k];spawnSoldier('red',p[0]+MR(-3,3),p[1]-.6,{yaw:Math.PI+MR(-.4,.4)});}
+  const hp=HOUSES.map(h=>[h.x+6*Math.sin(h.yaw),h.z+6*Math.cos(h.yaw)]);
+  for(let i=0;i<14;i++){const st=Math.floor(MR(0,hp.length));const path=[];for(let k=0;k<5;k++)path.push(hp[(st+k*3)%hp.length]);spawnSoldier('red',path[0][0]+MR(-2,2),path[0][1]+MR(-2,2),{path,speed:MR(1,1.5)});}
+  for(const ri of [1,2,3,4]){const rs=ROADS[ri].s;const a=Math.floor(MR(10,rs.length*.4)),b=Math.min(rs.length-5,a+Math.floor(MR(80,160)));const path=[];for(let i=a;i<b;i+=10)path.push([rs[i].x+rs[i].nx*3,rs[i].z+rs[i].nz*3]);
+    const pp=path.concat(path.slice().reverse());for(let k=0;k<4;k++)spawnSoldier('red',pp[0][0]+k*1.5,pp[0][1]+k,{path:pp.slice(k).concat(pp.slice(0,k)),speed:1.3});}
+  for(let q=0;q<7;q++){const pts=[randField(),randField(),randField()];for(let k=0;k<5;k++)spawnSoldier('red',pts[0][0]+MR(-4,4),pts[0][1]+MR(-4,4),{path:pts.map(p=>[p[0]+MR(-3,3),p[1]+MR(-3,3)]),speed:MR(1.1,1.5)});}
+  for(let i=0;i<10;i++){const rd=ROADS[i%5];const route=rd.s.filter((s,k)=>k%6===0).map(s=>[s.x+s.nx*1.3,s.z+s.nz*1.3]);spawnAIV('jeep',route,Math.floor(MR(0,route.length)));}
+  for(let i=0;i<5;i++){const route=[randField(),randField(),randField(),randField()];spawnAIV('tank',route,0);}}
+
 /* ================= bucle ================= */
 function resize(){renderer.setSize(innerWidth,innerHeight);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();sizeOSD();analogMat.uniforms.scrA.value=thermalMat.uniforms.scrA.value=innerWidth/innerHeight;}
 addEventListener('resize',resize);resize();
@@ -1610,7 +1662,7 @@ function update(dt){
       if(d.team==='blue'&&!d.remote){if(d.type==='fpv')updateFPV(d,dt,ctrl);else{updateRecon(d,dt,ctrl);if(d.state==='stored')d.battery=Math.min(1,d.battery+dt/90);}}
       if(d.state==='flying'||d.state==='ground')setDroneVisual(d,dt);}
     if(mode==='recon'&&active&&wheel){active.zoom=clamp(active.zoom*(wheel<0?2:.5),1,8);dcam.fov=60/active.zoom;dcam.updateProjectionMatrix();}wheel=0;
-    if(!gameOver&&MODE==='ia'){updateEnemy(dt);checkPilot();}if(NET.on)netSync(dt);
+    if(MODE==='ia'){updateAIV(dt,clockT);}if(NET.on)netSync(dt);
     updateSoldiers(dt,clockT);updateBeacons();
   }
   if(mode==='replay')updateReplay(dt);
@@ -1655,7 +1707,7 @@ await step(1,'Listo.');
 renderer.compile(scene,camera);
 const ld=$('#loading');ld.style.transition='opacity .8s';ld.style.opacity=0;setTimeout(()=>ld.remove(),900);
 $('#menu').classList.remove('hidden');
-window.__g={get __veh(){return VEH.speed},sim(n){for(let i=0;i<n;i++){clockT+=.05;update(.05);}},get lostMsg(){return lostMsg},droneHit,get frameN(){return frameN},updateHUD,objective,interaction,render,get mode(){return mode},PL,DRONES,ENEMY,SOLDIERS,BUNKERS,startGame,PC,connect,openChooser,takeFPV,takeRecon,placeDrone,get myB(){return myB},get active(){return active},keys,setMark:v=>MARK=v,applyQuality};
+window.__aiv=AIV;window.__g={get __veh(){return VEH.speed},sim(n){for(let i=0;i<n;i++){clockT+=.05;update(.05);}},get lostMsg(){return lostMsg},droneHit,get frameN(){return frameN},updateHUD,objective,interaction,render,get mode(){return mode},PL,DRONES,ENEMY,SOLDIERS,BUNKERS,startGame,PC,connect,openChooser,takeFPV,takeRecon,placeDrone,get myB(){return myB},get active(){return active},keys,setMark:v=>MARK=v,applyQuality};
 frame();
 })();
 </script>
