@@ -121,6 +121,19 @@ h3{margin:14px 0 8px;font-size:13px;color:var(--muted)}
 </div>
 
 <!-- MENÚ PRINCIPAL -->
+<div class="ov hide" id="nameScr">
+  <div class="pass">
+    <div class="pass-top"><b>CLASSROOM</b><span>Check-in</span></div>
+    <div class="pass-body" style="padding-bottom:18px">
+      <h3 style="margin-top:0">¿Cómo te llamas, piloto?</h3>
+      <p class="how" style="margin:0 0 10px">Tu nombre sale en el ranking y lo ve tu amigo cuando jugáis online.</p>
+      <div class="field"><input class="plain" id="firstName" maxlength="16" placeholder="Tu nombre" aria-label="Tu nombre de piloto" autocomplete="off"></div>
+      <p class="note" id="firstMsg"></p>
+      <button class="go" id="firstGo" style="margin-top:8px">Continuar</button>
+    </div>
+  </div>
+</div>
+
 <div class="ov" id="menu">
   <div class="pass">
     <div class="pass-top"><b>CLASSROOM</b><span>Tarjeta de embarque</span></div>
@@ -128,17 +141,15 @@ h3{margin:14px 0 8px;font-size:13px;color:var(--muted)}
       <div class="route">
         <div class="code">BCN<small>Salida</small></div>
         <div class="path"></div>
-        <div class="code" id="destCode">N1<small id="destName">Despegue</small></div>
+        <div class="code">∞<small>Destino</small></div>
       </div>
-      <h3>Nivel</h3>
-      <div class="lv-grid" id="lvGrid"></div>
       <h3>Tu avión</h3>
       <div class="plane-row">
         <canvas id="curThumb" width="220" height="100"></canvas>
         <div><b id="curName"></b><span class="tag" id="curTag"></span></div>
         <button class="btn2" id="openHangar">Hangar</button>
       </div>
-      <p class="how">Mantén pulsado (o la barra espaciadora) para subir y suelta para bajar. Llega a la meta del nivel para desbloquear el siguiente y un avión nuevo.</p>
+      <p class="how">Mantén pulsado (o la barra espaciadora) para subir y suelta para bajar. Vuela todo lo que puedas: cada nivel que alcanzas desbloquea un avión nuevo. Ojo, tocar el techo o el suelo es estrellarse.</p>
     </div>
     <div class="tear"></div>
     <div class="stub">
@@ -185,13 +196,15 @@ h3{margin:14px 0 8px;font-size:13px;color:var(--muted)}
             <button class="go" id="createRoom">Crear sala</button>
             <div class="field"><input id="codeIn" maxlength="6" placeholder="Código" aria-label="Código de sala" autocomplete="off"><button class="btn2" id="joinRoom">Unirse</button></div>
             <p class="note">Crea una sala y pásale el código a tu amigo, o escribe el suyo.</p>
+            <p class="note" id="connMsg"></p>
           </div>
           <div id="inRoom" hidden>
+            <p class="note" id="netErr" style="margin:0 0 8px;color:var(--red)" hidden></p>
             <div class="status">Sala <span id="roomCode" style="font-family:Bungee,Impact,sans-serif"></span></div>
             <p class="note" id="partnerTxt" style="margin:4px 0 10px">Esperando a tu amigo…</p>
             <button class="go" id="goOnline" disabled>¡Despegar juntos!</button>
             <button class="btn2" id="leaveRoom" style="width:100%;margin-top:8px">Salir de la sala</button>
-            <p class="note">Se juega el nivel que tenga elegido quien pulse despegar.</p>
+            <p class="note">Despegáis juntos desde el nivel 1 con los mismos obstáculos.</p>
           </div>
         </div>
       </div>
@@ -215,7 +228,7 @@ h3{margin:14px 0 8px;font-size:13px;color:var(--muted)}
       </div>
       <h3>Tus mejores vuelos</h3>
       <ol class="tops" id="myTops"></ol>
-      <h3>Tu récord en cada nivel</h3>
+      <h3>Niveles alcanzados</h3>
       <ol class="tops" id="lvTops"></ol>
     </div>
   </div>
@@ -270,15 +283,16 @@ const PAL=[
  ['#12002e','#ff2e88','#2a1040','#1a0828'],
 ];
 const LEVELS=[
- {name:'Despegue',goal:1000,pal:0,types:['tower','tower','bird'],v0:330,vmax:620},
- {name:'Ciudad',goal:1500,pal:1,types:['tower','tower','bird','billboard'],v0:350,vmax:680},
- {name:'Atardecer',goal:2000,pal:2,types:['tower','bird','balloon','balloon'],v0:370,vmax:740},
- {name:'Tormenta',goal:2500,pal:3,types:['tower','bird','storm','storm','balloon'],v0:390,vmax:800},
- {name:'Noche',goal:3000,pal:4,types:['tower','bird','storm','jet','balloon'],v0:410,vmax:860},
- {name:'Aurora',goal:3500,pal:5,types:['tower','storm','jet','jet','bird','balloon'],v0:430,vmax:920},
- {name:'Estratosfera',goal:4000,pal:6,types:['storm','jet','jet','bird','balloon','tower'],v0:460,vmax:980},
- {name:'Infinito',goal:0,pal:7,types:['tower','bird','balloon','storm','jet','jet'],v0:480,vmax:1050},
+ {name:'Despegue',at:0,pal:0,types:['tower','tower','bird']},
+ {name:'Ciudad',at:800,pal:1,types:['tower','tower','bird']},
+ {name:'Atardecer',at:2000,pal:2,types:['tower','bird','balloon','balloon']},
+ {name:'Tormenta',at:3600,pal:3,types:['tower','bird','storm','storm','balloon']},
+ {name:'Noche',at:5600,pal:4,types:['tower','bird','storm','jet','balloon']},
+ {name:'Aurora',at:8000,pal:5,types:['tower','storm','jet','jet','bird','balloon']},
+ {name:'Estratosfera',at:11000,pal:6,types:['storm','jet','jet','bird','balloon','tower']},
+ {name:'Infinito',at:14500,pal:7,types:['tower','bird','balloon','storm','jet','jet']},
 ];
+const BILLBOARD_LEVELS=[3,5];
 const RAR={'Común':'#7d8ba3','Raro':'#2e8bff','Épico':'#9b4dff','Legendario':'#e0a400','Mítico':'#ff3d5a'};
 const PLANES=[
  {name:'Avioneta',r:'Común',fl:['#ffffff','#e6e6e6'],len:26},
@@ -297,7 +311,6 @@ let save=Object.assign({lvl:1,plane:0,best:{},top:[]},LS.get('classroom_save',{}
 if(!Array.isArray(save.top))save.top=[];
 if(!save.top.length){const old=LS.get('skyrush_scores',[]);if(Array.isArray(old))save.top=old.slice(0,5).map(o=>({s:o.s|0,l:0,d:o.d||''}));}
 let muted=!!LS.get('classroom_muted',false);
-let selLvl=Math.min(save.lvl,LEVELS.length)-1;
 const planesUnlocked=()=>Math.min(PLANES.length,save.lvl);
 const bestAll=()=>save.top.length?save.top[0].s:0;
 function mergeSave(r){
@@ -349,22 +362,22 @@ const playH=()=>H-GH;
 const keys=[false,false];const ptrs=new Map();
 function mkPlane(model,yf,tag,xf){return{x:W*xf,xf,y:H*yf,yf,vy:0,rot:0,held:false,model,alive:true,shield:false,inv:0,tag};}
 
-function startRun(level,m,seed,run){
-  au();lvl=level;L=LEVELS[lvl];mode=m;R=mulberry(seed>>>0);
+function startRun(m,seed,run){
+  au();lvl=0;L=LEVELS[0];mode=m;R=mulberry(seed>>>0);
   pls=[mkPlane(save.plane,.38,m==='local'?'J1':'',.24)];
   if(m==='local')pls.push(mkPlane(save.plane,.56,'J2',.16));
   obs=[];coins=[];pups=[];parts=[];texts=[];bigs=[];
   spd=0;dist=0;bonus=0;combo=0;comboT=0;magnetT=0;dblT=0;shake=0;flash=0;
-  prevBest=save.best[lvl]|0;recordBeaten=prevBest===0;spawnO=1.3;spawnC=.6;spawnP=rr(8,12);billDue=lvl===1?2.2:0;
+  prevBest=bestAll();recordBeaten=prevBest===0;spawnO=1.3;spawnC=.6;spawnP=rr(8,12);billDue=0;newPlaneRun=-1;
   dieT=0;winT=0;gt=0;starsGot=0;maxCombo=0;nearMisses=0;milestone=0;palIdx=L.pal;dieReason='';
   keys[0]=keys[1]=false;ptrs.clear();
   cnt=3;state='count';paused=false;lastBeep=4;
   if(m==='online'){net.run=run;net.ghostY=null;net.partnerLeft=false;}
   hideAll();$('hud').classList.remove('hide');
-  $('lvLabel').textContent=`Nivel ${lvl+1} · ${L.name}`;$('barWrap').hidden=!L.goal;
+  $('lvLabel').textContent=`Nivel 1 · ${L.name}`;$('barWrap').hidden=false;$('bar').style.width='0%';
   $('best').textContent='🏆 '+(prevBest).toLocaleString('es-ES');$('score').textContent='0';
 }
-let lastBeep=4;
+let lastBeep=4,newPlaneRun=-1;
 
 /* ================= EFECTOS ================= */
 function burst(x,y,n,cols,sp=260,life=.6,g=0,size=4){for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2,v=Math.random()*sp*S;parts.push({x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:life*(.5+Math.random()*.7),max:life,col:cols[i%cols.length],size:(size*(.5+Math.random()))*S,g:g*S});}}
@@ -409,6 +422,16 @@ function teamDie(reason){
   try{navigator.vibrate&&navigator.vibrate([60,40,120])}catch(e){}
   netSet({ph:'dead'});
 }
+function levelUp(n){
+  lvl=n;L=LEVELS[n];palIdx=L.pal;flash=.5;bonus+=100;SFX.level();confetti(60);
+  $('lvLabel').textContent=`Nivel ${n+1} · ${L.name}`;
+  if(BILLBOARD_LEVELS.includes(n))billDue=1.6;
+  if(save.lvl<n+1){
+    save.lvl=n+1;const np=Math.min(PLANES.length-1,n);newPlaneRun=np;
+    bigtext('Nivel '+(n+1)+' · '+L.name,'Nuevo avión: '+PLANES[np].name,'#ffc21a');SFX.record();confetti(120);
+    persist();pushScore();
+  }else bigtext('Nivel '+(n+1),L.name+' · +100','#fff');
+}
 function levelWin(){
   state='win';winT=2.2;flash=.6;SFX.win();confetti(220);
   bigtext('¡Nivel superado!',L.name+' completado','#ffc21a');
@@ -432,22 +455,21 @@ function update(dt){
     if(cnt<=0){state='play';SFX.beep(true);bigtext('¡YA!','','#fff');netSet({ph:'play'});}
     return;
   }
-  if(state==='dying'){dieT-=dt;moveWorld(dt*.3);if(dieT<=0)endRun(false);return;}
-  if(state==='win'){winT-=dt;for(const p of pls)if(p.alive){p.vy-=900*S*dt;p.y+=p.vy*dt;p.x+=380*S*dt;p.rot=Math.max(-.5,p.rot-dt);trail(p);}moveWorld(dt);if(winT<=0)endRun(true);return;}
+  if(state==='dying'){dieT-=dt;moveWorld(dt*.3);if(dieT<=0)endRun();return;}
+  if(state==='win'){winT-=dt;for(const p of pls)if(p.alive){p.vy-=900*S*dt;p.y+=p.vy*dt;p.x+=380*S*dt;p.rot=Math.max(-.5,p.rot-dt);trail(p);}moveWorld(dt);if(winT<=0)endRun();return;}
   if(state!=='play')return;
 
-  gt+=dt;spd=Math.min(L.vmax,L.v0+gt*8)*S;
+  gt+=dt;spd=Math.min(1050,330+gt*7.5)*S;
   const ph=playH();
   for(const p of pls){
     if(!p.alive)continue;
     p.vy+=(p.held?1550-3300:1550)*S*dt;p.vy=clamp(p.vy,-620*S,720*S);p.y+=p.vy*dt;
-    if(p.y<18*S){p.y=18*S;p.vy=Math.max(0,p.vy);}
+    if(p.y<14*S){if(p.shield){p.y=16*S;p.vy=420*S;hitShield(p);}else if(p.inv>0){p.y=16*S;p.vy=300*S;}else{teamDie('ceiling');return;}}
     p.rot+=((p.vy/(720*S))*.6-p.rot)*Math.min(1,dt*10);p.inv=Math.max(0,p.inv-dt);
     trail(p);
   }
   dist+=spd*dt/S/10;
-  if(L.goal&&score()>=L.goal){levelWin();return;}
-  if(!L.goal){const ms=Math.floor(score()/1000);if(ms>milestone){milestone=ms;palIdx=(L.pal+ms)%PAL.length;bonus+=100;SFX.level();bigtext(ms*1000+' puntos','+100 de bonus','#ffc21a');confetti(50);}}
+  if(lvl+1<LEVELS.length&&dist>=LEVELS[lvl+1].at){levelUp(lvl+1);}
   if(!recordBeaten&&score()>prevBest){recordBeaten=true;SFX.record();confetti(160);bigtext('¡Récord superado!','Sigue, que cada punto cuenta','#ffc21a');}
   if(comboT>0){comboT-=dt;if(comboT<=0)combo=0;}
   magnetT=Math.max(0,magnetT-dt);dblT=Math.max(0,dblT-dt);
@@ -523,41 +545,34 @@ function moveWorld(dt){
 }
 
 /* ================= FIN DE PARTIDA ================= */
-function endRun(won){
+function endRun(){
   state='over';netSet({ph:'over'});
   const s=score(),d=new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'short'});
-  const isRec=s>(save.best[lvl]|0)&&s>0;
-  save.best[lvl]=Math.max(save.best[lvl]|0,s);
-  const prevTop=bestAll();
+  const prevTop=bestAll();const isRec=s>prevTop&&s>0;
   const rec={s,l:lvl,d};save.top.push(rec);save.top.sort((a,b)=>b.s-a.s);save.top=save.top.slice(0,5);
-  let newPlane=-1;
-  if(won&&lvl+1<LEVELS.length&&save.lvl<lvl+2){save.lvl=lvl+2;newPlane=Math.min(PLANES.length-1,lvl+1);selLvl=lvl+1;}
-  else if(won&&lvl+1<LEVELS.length)selLvl=lvl+1;
+  const newPlane=newPlaneRun;
+  if(newPlane>=0)save.plane=newPlane;
   persist();pushScore();
   $('hud').classList.add('hide');
-  const title=won?'¡NIVEL SUPERADO!':dieReason==='partner'?'TU AMIGO CAYÓ':'ATERRIZAJE FORZOSO';
-  $('overTitle').textContent=title;
+  $('overTitle').textContent=dieReason==='partner'?'TU AMIGO CAYÓ':'ATERRIZAJE FORZOSO';
   $('overLvl').textContent=`Nivel ${lvl+1} · ${L.name}`;
   $('final').textContent=s.toLocaleString('es-ES');
-  $('newrec').hidden=!isRec;
-  $('newrec').textContent=s>prevTop&&prevTop>0?'🏆 ¡Récord absoluto!':'🏆 ¡Récord del nivel!';
-  let note='';
-  if(!won&&L.goal)note=`Te faltaron ${(L.goal-s).toLocaleString('es-ES')} puntos para la meta (${L.goal.toLocaleString('es-ES')}).`;
-  if(won&&lvl+1<LEVELS.length)note=`Nivel ${lvl+2} · ${LEVELS[lvl+1].name} desbloqueado.`;
+  $('newrec').hidden=!isRec;$('newrec').textContent='🏆 ¡Nuevo récord!';
+  let note=`Llegaste al nivel ${lvl+1} (${L.name}).`;
+  if(dieReason==='ceiling')note+=' Te estrellaste contra el techo.';
   if(mode==='online'&&net.partnerScore!=null)note+=` Tu amigo hizo ${net.partnerScore.toLocaleString('es-ES')}.`;
   $('overNote').textContent=note;
   $('stStars').textContent=starsGot;$('stCombo').textContent=maxCombo;$('stNear').textContent=nearMisses;
   $('unlockBox').hidden=newPlane<0;
-  if(newPlane>=0){const pl=PLANES[newPlane];$('unlockName').textContent=pl.name;tagEl($('unlockTag'),pl.r);thumb($('unlockThumb'),newPlane,false);save.plane=newPlane;persist();}
-  $('again').textContent=won&&lvl+1<LEVELS.length?'Siguiente nivel':'Volar otra vez';
-  if(mode==='online'&&!(net.partner))$('again').textContent='Volver a la sala';
+  if(newPlane>=0){const pl=PLANES[newPlane];$('unlockName').textContent=pl.name;tagEl($('unlockTag'),pl.r);thumb($('unlockThumb'),newPlane,false);}
+  $('again').textContent=mode==='online'&&!net.partner?'Volver a la sala':'Volar otra vez';
   show('over');overAt=performance.now();
   if(isRec||newPlane>=0){confetti(200);SFX.record();}
   $('again').focus({preventScroll:true});
 }
 function again(){
   if(mode==='online'){if(net.partner)goOnline();else{renderFriend();show('friend');}return;}
-  startRun(selLvl,mode,Math.floor(Math.random()*1e9));
+  startRun(mode,Math.floor(Math.random()*1e9));
 }
 
 /* ================= DIBUJO ================= */
@@ -741,7 +756,7 @@ function drawObs(o,dark){
 let lastCombo=-1,lastChips='';
 function bumpCombo(){const el=$('combo');el.classList.remove('bump');void el.offsetWidth;el.classList.add('bump');}
 function hud(){
-  if(state==='play'||state==='dying'||state==='win'){$('score').textContent=score().toLocaleString('es-ES');if(L.goal)$('bar').style.width=Math.min(100,score()/L.goal*100)+'%';}
+  if(state==='play'||state==='dying'||state==='win'){$('score').textContent=score().toLocaleString('es-ES');if(lvl+1<LEVELS.length){const a=LEVELS[lvl].at,b=LEVELS[lvl+1].at;$('bar').style.width=clamp((dist-a)/(b-a)*100,0,100)+'%';}else $('bar').style.width='100%';}
   const ct=combo>1?`Combo ${combo} · x${mult()}`:(dblT>0?'x2':'');
   if(ct!==lastCombo){$('combo').textContent=ct;lastCombo=ct;}
   let chips=pls.map(p=>p.shield?`<span class="chip">🛡️${p.tag?' '+p.tag:''}</span>`:'').join('')+(magnetT>0?`<span class="chip">🧲 ${Math.ceil(magnetT)}s</span>`:'')+(dblT>0?`<span class="chip">✖️2 ${Math.ceil(dblT)}s</span>`:'');
@@ -750,7 +765,7 @@ function hud(){
 }
 
 /* ================= MENÚS ================= */
-const OVS=['menu','hangar','friend','rank','over'];
+const OVS=['nameScr','menu','hangar','friend','rank','over'];
 function hideAll(){OVS.forEach(id=>$(id).classList.add('hide'));}
 function show(id){hideAll();$(id).classList.remove('hide');}
 function tagEl(el,r){el.textContent=r;el.style.background=RAR[r];}
@@ -760,15 +775,6 @@ function thumb(cnv,i,locked){
   if(locked){c.globalCompositeOperation='source-atop';c.fillStyle='rgba(40,52,78,.92)';c.fillRect(0,0,w,h);c.globalCompositeOperation='source-over';}
 }
 function renderMenu(){
-  const g=$('lvGrid');g.innerHTML='';
-  LEVELS.forEach((lv,i)=>{
-    const b=document.createElement('button');b.className='lv'+(i===selLvl?' sel':'');
-    const open=i<save.lvl;b.disabled=!open;
-    const best=save.best[i]|0;
-    b.innerHTML=`<b>${i+1}</b>${lv.name}<small>${open?(best?'🏆 '+best.toLocaleString('es-ES'):(lv.goal?'Meta '+lv.goal.toLocaleString('es-ES'):'Sin fin')):'🔒'}</small>`;
-    b.onclick=()=>{selLvl=i;renderMenu();};g.appendChild(b);
-  });
-  $('destCode').firstChild.nodeValue='N'+(selLvl+1);$('destName').textContent=LEVELS[selLvl].name;
   const pl=PLANES[save.plane];$('curName').textContent=pl.name;tagEl($('curTag'),pl.r);thumb($('curThumb'),save.plane,false);
 }
 function renderHangar(){
@@ -779,7 +785,7 @@ function renderHangar(){
     const c=document.createElement('canvas');c.width=300;c.height=124;b.appendChild(c);
     const n=document.createElement('b');n.textContent=open?pl.name:'???';b.appendChild(n);
     const t=document.createElement('span');t.className='tag';tagEl(t,pl.r);b.appendChild(t);
-    if(!open){const l=document.createElement('span');l.className='lock';l.textContent='🔒 Supera el nivel '+i;b.appendChild(l);}
+    if(!open){const l=document.createElement('span');l.className='lock';l.textContent='🔒 Llega al nivel '+(i+1);b.appendChild(l);}
     b.onclick=()=>{save.plane=i;persist();renderHangar();renderMenu();};
     g.appendChild(b);thumb(c,i,!open);
   });
@@ -790,7 +796,7 @@ async function renderRank(){
   if(!save.top.length)my.appendChild(li('<span>Aún no has volado.</span>'));
   save.top.forEach((r,i)=>my.appendChild(li(`<span>${['🥇','🥈','🥉','4.','5.'][i]} ${r.d} · N${(r.l|0)+1}</span><b>${r.s.toLocaleString('es-ES')}</b>`)));
   const lt=$('lvTops');lt.innerHTML='';
-  LEVELS.forEach((lv,i)=>lt.appendChild(li(`<span>${i+1}. ${lv.name}</span><b>${i<save.lvl?(save.best[i]|0).toLocaleString('es-ES'):'🔒'}</b>`)));
+  LEVELS.forEach((lv,i)=>lt.appendChild(li(`<span>${i+1}. ${lv.name}</span><b>${i<save.lvl?'✅':'🔒'}</b>`)));
   const g=$('globalTops');g.innerHTML='';
   const fb=!!(BK&&BK.kind==='firebase');
   $('idBox').hidden=!fb;if(fb)$('myCode').textContent=myId;
@@ -810,11 +816,15 @@ function backToMenu(){if(state!=='menu'){state='menu';pls=[mkPlane(save.plane,.3
 /* ================= ONLINE ================= */
 /* Dentro de Claude usa sus salas y su base de datos; en tu propio servidor usa Firebase. */
 const FB_CONFIG={apiKey:"AIzaSyAS2sEiZ3vh3DpvG-Vx85w73zoAOdaFCNs",authDomain:"marela-8d4e5.firebaseapp.com",databaseURL:"https://marela-8d4e5-default-rtdb.europe-west1.firebasedatabase.app",projectId:"marela-8d4e5",storageBucket:"marela-8d4e5.firebasestorage.app",messagingSenderId:"107896274524",appId:"1:107896274524:web:3015709404862e0c58b099"};
-const FB_SDK='https://www.gstatic.com/firebasejs/12.17.1/';
-const FB_ROOT='classroom';
+const FB_SDKS=['https://www.gstatic.com/firebasejs/12.17.1/','https://www.gstatic.com/firebasejs/10.12.2/'];
+const FB_ROOT='salas';
+const FB_PRE='CLASSROOM_';
+let netError='',fbConnected=null;
+function reportErr(e){const m=String(e&&(e.code||e.message)||e||'');netError=/permission|denied/i.test(m)?'El servidor ha rechazado la conexión (permiso denegado). Hay que permitir escribir en salas/ en las reglas de Firebase.':'Error del servidor: '+m;console.warn('[Classroom]',m);if(!$('friend').classList.contains('hide'))renderFriend();}
 let BK=null,bkReady=false,board=[];
 let myName=String(LS.get('classroom_name','')||'').slice(0,16);
 const rid=()=>Math.random().toString(36).slice(2,10);
+const SID=rid();
 let myId=LS.get('classroom_pid',null);if(typeof myId!=='string'||!/^[a-z0-9]{4,12}$/.test(myId)){myId=rid();LS.set('classroom_pid',myId);}
 const net={room:null,code:'',partner:null,partnerName:'',partnerPlane:0,partnerScore:null,run:'',lastRun:'',ghostY:null,ghostRot:0,partnerLeft:false,last:{}};
 
@@ -836,21 +846,21 @@ function claudeBackend(db,user,room,uid){
 function fbBackend(fdb,uid){
   const root=fdb.ref(FB_ROOT);
   return{kind:'firebase',id:uid,canRoom:true,canBoard:true,
-    async loadProgress(){const x=await root.child('progress/'+uid).once('value');return x.val();},
-    saveProgress(v){root.child('progress/'+uid).set(JSON.parse(JSON.stringify(v))).catch(()=>{});},
-    pushScore(r){root.child('scores/'+uid).set(Object.assign({name:myName||'Piloto'},r)).catch(()=>{});},
-    watchBoard(cb){root.child('scores').orderByChild('best').limitToLast(20).on('value',x=>{const v=x.val()||{};cb(Object.keys(v).map(k=>Object.assign({id:k},v[k])).sort((a,b)=>(b.best|0)-(a.best|0)));},()=>{});},
+    async loadProgress(){const x=await root.child(FB_PRE+'progress/'+uid).once('value');return x.val();},
+    saveProgress(v){root.child(FB_PRE+'progress/'+uid).set(JSON.parse(JSON.stringify(v))).catch(reportErr);},
+    pushScore(r){root.child(FB_PRE+'scores/'+uid).set(Object.assign({name:myName||'Piloto'},r)).catch(reportErr);},
+    watchBoard(cb){root.child(FB_PRE+'scores').on('value',x=>{const v=x.val()||{};cb(Object.keys(v).map(k=>Object.assign({id:k},v[k])).sort((a,b)=>(b.best|0)-(a.best|0)).slice(0,20));},reportErr);},
     async names(){const o={};for(const b of board)if(b.name)o[b.id]=String(b.name).slice(0,16);return o;},
     async join(code){
-      const ref=root.child('rooms/'+code),me=ref.child(uid);
-      await me.onDisconnect().remove();
+      const ref=root.child(FB_PRE+'sala_'+code),me=ref.child(SID);
+      await me.onDisconnect().remove().catch(reportErr);
       let cur={},last=0,timer=null,sentPh=null,h=null;
-      const flush=()=>{timer=null;last=Date.now();sentPh=cur.ph;me.set(cur).catch(()=>{});};
+      const flush=()=>{timer=null;last=Date.now();sentPh=cur.ph;cur.t=Date.now();me.set(cur).catch(reportErr);};
       return{
         presence(p){Object.assign(cur,p,{name:myName||'Piloto'});
           if(cur.ph!==sentPh||Date.now()-last>=70){if(timer)clearTimeout(timer);flush();}else if(!timer)timer=setTimeout(flush,70);
           return Promise.resolve();},
-        onPeers(cb){h=x=>{const v=x.val()||{};cb(Object.keys(v).map(k=>({isMe:k===uid,id:k,presence:v[k]||{}})));};ref.on('value',h,()=>cb(null));},
+        onPeers(cb){h=x=>{const v=x.val()||{};cb(Object.keys(v).filter(k=>v[k]&&typeof v[k]==='object').map(k=>({isMe:k===SID,id:v[k].uid||k,presence:v[k]})));};ref.on('value',h,e=>{reportErr(e);cb(null);});},
         async leave(){if(h)ref.off('value',h);if(timer)clearTimeout(timer);me.onDisconnect().cancel();await me.remove().catch(()=>{});}
       };
     }};
@@ -858,7 +868,7 @@ function fbBackend(fdb,uid){
 function loadScript(src){return new Promise((res,rej)=>{const el=document.createElement('script');el.src=src;el.onload=res;el.onerror=rej;document.head.appendChild(el);});}
 function netSet(patch){
   if(!net.room)return;
-  const p=Object.assign({},patch,{run:net.run||null,pl:save.plane,uid:myId||null});
+  const p=Object.assign({},patch,{run:net.run||null,pl:save.plane,uid:myId||null,name:myName||'Piloto'});
   if(patch.ph!=='play'||net.last.ph!=='play'||Math.abs((net.last.y||0)-(p.y||0))>.002||net.last.sc!==p.sc){net.last=p;net.room.presence(p);}
 }
 function pushScore(){
@@ -874,9 +884,15 @@ async function startBackend(){
       let uid=null;try{if(user)uid=await user.id();}catch(e){}
       if(db||room){if(uid)myId=uid;BK=claudeBackend(db,user,room,uid);}
     }else{
-      if(!window.firebase){await loadScript(FB_SDK+'firebase-app-compat.js');await loadScript(FB_SDK+'firebase-database-compat.js');}
+      if(!window.firebase){
+        let ok=false;
+        for(const base of FB_SDKS){try{await loadScript(base+'firebase-app-compat.js');await loadScript(base+'firebase-database-compat.js');ok=true;break;}catch(e){}}
+        if(!ok)throw new Error('No se pudo cargar Firebase');
+      }
       if(!firebase.apps.length)firebase.initializeApp(FB_CONFIG);
-      BK=fbBackend(firebase.database(),myId);
+      const fdb=firebase.database();
+      try{fdb.ref('.info/connected').on('value',x=>{fbConnected=!!x.val();if(!$('friend').classList.contains('hide'))renderFriend();});}catch(e){}
+      BK=fbBackend(fdb,myId);
     }
   }catch(e){BK=null;}
   bkReady=true;
@@ -905,6 +921,9 @@ function renderFriend(){
   $('onlineMsg').textContent=on?'':(bkReady?'El modo online no está disponible ahora mismo. Podéis jugar los dos en este dispositivo.':'Conectando con el servidor…');
   $('noRoom').hidden=!!net.room;$('inRoom').hidden=!net.room;
   syncName();
+  const cm=BK&&BK.kind==='firebase'?(netError||(fbConnected===false?'Sin conexión con el servidor. Comprueba internet.':fbConnected?'✅ Conectado al servidor.':'Conectando con el servidor…')):'';
+  $('connMsg').textContent=cm;
+  $('netErr').hidden=!netError;$('netErr').textContent=netError;
   if(net.room){
     $('roomCode').textContent=net.code.toUpperCase();
     $('partnerTxt').textContent=net.partner?`✈️ ${net.partnerName||'Tu amigo'} está en la sala con el ${PLANES[net.partnerPlane|0].name}.`:'Esperando a tu amigo… pásale el código.';
@@ -917,7 +936,7 @@ async function joinRoom(code){
   try{
     if(net.room){await net.room.leave();}
     net.room=await BK.join(code);net.code=code;net.partner=null;net.partnerName='';
-    net.room.presence({ph:'lobby',pl:save.plane,uid:myId||null,run:null});
+    net.room.presence({ph:'lobby',pl:save.plane,uid:myId||null,run:null,name:myName||'Piloto'});
     net.room.onPeers(peers=>{if(!peers){net.room=null;net.partner=null;renderFriend();return;}onPeers(peers);});
   }catch(e){net.room=null;$('onlineMsg').textContent='No se pudo entrar en la sala.';}
   renderFriend();
@@ -930,7 +949,7 @@ async function onPeers(peers){
     const pr=p.presence||{};
     net.partnerPlane=clamp(pr.pl|0,0,PLANES.length-1);
     if(BK.kind==='firebase'){net.partnerName=String(pr.name||'').slice(0,16);}
-    else if(!net.partnerName&&p.id){const ns=await BK.names([p.id]);net.partnerName=ns[p.id]||'';}
+    else if(!net.partnerName&&p.id){const ns=await BK.names([p.id]);net.partnerName=ns[p.id]||String(pr.name||'').slice(0,16);}
     if(pr.run&&pr.run===net.run&&mode==='online'){
       if(typeof pr.y==='number'){const ny=clamp(pr.y,0,1);net.ghostRot=clamp((ny-(net.ghostY??ny))*25,-.5,.5);net.ghostY=ny;}
       if(typeof pr.sc==='number')net.partnerScore=pr.sc|0;
@@ -939,7 +958,7 @@ async function onPeers(peers){
     if(pr.ph==='go'&&typeof pr.run==='string'&&pr.run!==net.lastRun){
       const lv=clamp(pr.lvl|0,0,LEVELS.length-1),seed=(pr.seed|0)>>>0;
       if(state==='menu'||state==='over'||(state==='count'&&mode==='online'&&pr.run<net.run)){
-        net.lastRun=pr.run;net.partnerScore=0;startRun(lv,'online',seed,pr.run);netSet({ph:'go',seed,lvl:lv});
+        net.lastRun=pr.run;net.partnerScore=0;startRun('online',seed,pr.run);netSet({ph:'go',seed});
       }
     }
   }else if(had&&mode==='online'&&(state==='play'||state==='count')){net.partnerLeft=true;net.ghostY=null;ftext(W/2,H*.2,'Tu amigo se ha desconectado','#fff',20);}
@@ -948,7 +967,7 @@ async function onPeers(peers){
 function goOnline(){
   if(!net.room||!net.partner)return;
   const run=Date.now().toString(36)+Math.random().toString(36).slice(2,6),seed=Math.floor(Math.random()*1e9);
-  net.lastRun=run;net.partnerScore=0;startRun(selLvl,'online',seed,run);netSet({ph:'go',seed,lvl:selLvl});
+  net.lastRun=run;net.partnerScore=0;startRun('online',seed,run);netSet({ph:'go',seed});
 }
 async function loadByCode(){
   const code=$('loadIn').value.trim().toLowerCase();
@@ -959,7 +978,7 @@ async function loadByCode(){
     const fb=fbBackend(firebase.database(),code);const r=await fb.loadProgress();
     if(!r){$('loadMsg').textContent='No hay ningún piloto con ese código.';return;}
     myId=code;LS.set('classroom_pid',code);BK=fb;mergeSave(r);persist();pushScore();
-    selLvl=Math.min(save.lvl,LEVELS.length)-1;renderMenu();
+    renderMenu();
     $('loadMsg').textContent='Progreso recuperado: nivel '+save.lvl+' desbloqueado.';$('loadIn').value='';renderRank();
   }catch(e){$('loadMsg').textContent='No se pudo conectar con el servidor.';}
 }
@@ -979,7 +998,7 @@ addEventListener('keydown',e=>{
   const k=e.code;
   if(k==='Space'||k==='KeyW'||k==='ArrowUp'){
     e.preventDefault();
-    if(!$('menu').classList.contains('hide')&&k==='Space'){startRun(selLvl,'solo',Math.floor(Math.random()*1e9));return;}
+    if(!$('menu').classList.contains('hide')&&k==='Space'){startRun('solo',Math.floor(Math.random()*1e9));return;}
     if(state==='over'){if(k==='Space'&&performance.now()-overAt>700)again();return;}
     if(paused){paused=false;return;}
     const i=(k==='ArrowUp'&&mode==='local')?1:0;keys[i]=true;setHeld();
@@ -987,8 +1006,8 @@ addEventListener('keydown',e=>{
   if(k==='KeyP'&&state==='play'&&mode!=='online')paused=!paused;
 });
 addEventListener('keyup',e=>{const k=e.code;if(k==='Space'||k==='KeyW')keys[0]=false;if(k==='ArrowUp')keys[mode==='local'?1:0]=false;setHeld();});
-$('play').onclick=()=>startRun(selLvl,'solo',Math.floor(Math.random()*1e9));
-$('playLocal').onclick=()=>startRun(selLvl,'local',Math.floor(Math.random()*1e9));
+$('play').onclick=()=>startRun('solo',Math.floor(Math.random()*1e9));
+$('playLocal').onclick=()=>startRun('local',Math.floor(Math.random()*1e9));
 $('openHangar').onclick=()=>{renderHangar();show('hangar');};
 $('openFriend').onclick=()=>{renderFriend();show('friend');};
 $('openRank').onclick=()=>{renderRank();show('rank');};
@@ -1011,7 +1030,17 @@ addEventListener('blur',autoPause);
 addEventListener('resize',()=>{resize();pls.forEach(p=>p.x=W*p.xf);});
 
 /* ================= BUCLE ================= */
-pls=[mkPlane(save.plane,.35,'',.24)];renderMenu();show('menu');
+pls=[mkPlane(save.plane,.35,'',.24)];renderMenu();
+function finishName(){
+  const v=$('firstName').value.trim().replace(/\s+/g,' ').slice(0,16);
+  if(v.length<2){$('firstMsg').textContent='Escribe al menos 2 letras.';return;}
+  myName=v;LS.set('classroom_name',myName);syncName();persist();pushScore();
+  if(net.room)net.room.presence({name:myName});
+  show('menu');
+}
+$('firstGo').onclick=finishName;
+$('firstName').addEventListener('keydown',e=>{if(e.key==='Enter')finishName();});
+$('firstName').value=myName;show('nameScr');setTimeout(()=>$('firstName').focus(),50);
 let last=performance.now();
 function loop(now){
   const dt=Math.min(.033,(now-last)/1000);last=now;
